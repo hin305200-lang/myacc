@@ -2,6 +2,9 @@
   "name": "@nexus-trade/api",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "26.x"
+  },
   "main": "src/server.ts",
   "type": "commonjs",
   "scripts": {
