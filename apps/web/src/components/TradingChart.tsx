@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { IChartApi, ISeriesApi, Time, ILineSeriesApi, IHistogramSeriesApi } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { Settings, Maximize2, BarChart3, Zap, TrendingUp, TrendingDown, Activity, Layers } from 'lucide-react'
 
 interface SymbolData {
@@ -34,14 +34,14 @@ export default function TradingChart({ symbol, candles }: TradingChartProps) {
   const macdChartRef = useRef<IChartApi | null>(null)
   
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
-  const ema20Ref = useRef<ILineSeriesApi | null>(null)
-  const ema50Ref = useRef<ILineSeriesApi | null>(null)
-  const ema200Ref = useRef<ILineSeriesApi | null>(null)
-  const volumeRef = useRef<IHistogramSeriesApi | null>(null)
-  const rsiRef = useRef<ILineSeriesApi | null>(null)
-  const macdLineRef = useRef<ILineSeriesApi | null>(null)
-  const macdSignalRef = useRef<ILineSeriesApi | null>(null)
-  const macdHistRef = useRef<IHistogramSeriesApi | null>(null)
+  const ema20Ref = useRef<ILineSeriesApi<'Line'> | null>(null)
+  const ema50Ref = useRef<ILineSeriesApi<'Line'> | null>(null)
+  const ema200Ref = useRef<ILineSeriesApi<'Line'> | null>(null)
+  const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const rsiRef = useRef<ILineSeriesApi<'Line'> | null>(null)
+  const macdLineRef = useRef<ILineSeriesApi<'Line'> | null>(null)
+  const macdSignalRef = useRef<ILineSeriesApi<'Line'> | null>(null)
+  const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   
   const [showIndicators, setShowIndicators] = useState(true)
   const [chartLoaded, setChartLoaded] = useState(false)
