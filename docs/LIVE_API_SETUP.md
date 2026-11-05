@@ -1,6 +1,8 @@
-# Fix “Cannot connect to server” on barrattcookelimited.com
+# Fix “Cannot connect to server” / **404** on sign-up
 
-The Vercel site is **frontend only**. Sign-up needs the **Fastify API** + **Postgres (Supabase)** running somewhere public.
+**Supabase alone is not enough** — it is only the database. You still need the **Fastify API** (`apps/api`) deployed (Render/Railway) with `DATABASE_URL` pointing at Supabase.
+
+The Vercel site is **frontend only**. Sign-up calls `/backend/auth/register`, which proxies to your live API.
 
 ---
 

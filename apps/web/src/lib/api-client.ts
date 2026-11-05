@@ -1,10 +1,17 @@
 import { getApiBaseUrl } from './public-env'
 
-const API_URL = getApiBaseUrl()
+function buildUrl(path: string): string {
+  const base = getApiBaseUrl()
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  if (base.startsWith('http://') || base.startsWith('https://')) {
+    return `${base}${normalizedPath}`
+  }
+  return `${base}${normalizedPath}`
+}
 
 export const apiClient = {
   async get<T>(path: string, token?: string): Promise<T> {
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(buildUrl(path), {
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -19,7 +26,7 @@ export const apiClient = {
 
   async post<T>(path: string, body: unknown, token?: string): Promise<T> {
     try {
-      const res = await fetch(`${API_URL}${path}`, {
+      const res = await fetch(buildUrl(path), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,7 +67,7 @@ export const apiClient = {
   },
 
   async delete<T>(path: string, token?: string): Promise<T> {
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(buildUrl(path), {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -75,7 +82,7 @@ export const apiClient = {
   },
 
   async put<T>(path: string, body: unknown, token?: string): Promise<T> {
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(buildUrl(path), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
