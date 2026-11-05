@@ -26,7 +26,11 @@ The Vercel site is **frontend only**. Sign-up calls `/backend/auth/register`, wh
    | `DATABASE_URL` | **Transaction pooler**, port **6543** | `postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1` |
    | `DIRECT_URL` | **Session pooler**, port **5432** (same pooler host, not `db.…`) | `postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:5432/postgres` |
 
-   URL-encode special characters in the password (`@`, `#`, etc.).
+   URL-encode special characters in the password (`@`, `#`, `%`, etc.).
+
+   **Important:** Pooler URLs use username **`postgres.<project-ref>`** (e.g. `postgres.fuefkgitvfkvmkyttxzc`). The direct host uses plain `postgres` — that username will **not** work on the pooler (`P1000` authentication failed).
+
+   You can delete **`DIRECT_URL`** on Render if **`DATABASE_URL`** is the 6543 pooler URI; startup derives session pooler for migrations.
 
 5. In Supabase **Project Settings**, confirm the project is **not paused** (free tier pauses after inactivity).
 6. Wait until **Live** — open `https://myacc-api.onrender.com/health` → `{"status":"ok",...}`
