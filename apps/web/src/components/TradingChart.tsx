@@ -34,15 +34,14 @@ export default function TradingChart({ symbol, candles }: TradingChartProps) {
   const macdChartRef = useRef<IChartApi | null>(null)
   
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
-  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
-const ema20Ref = useRef<ISeriesApi<'Line'> | null>(null)
-const ema50Ref = useRef<ISeriesApi<'Line'> | null>(null)
-const ema200Ref = useRef<ISeriesApi<'Line'> | null>(null)
-const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
-const rsiRef = useRef<ISeriesApi<'Line'> | null>(null)
-const macdLineRef = useRef<ISeriesApi<'Line'> | null>(null)
-const macdSignalRef = useRef<ISeriesApi<'Line'> | null>(null)
-const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const ema20Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema50Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema200Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const rsiRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const macdLineRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const macdSignalRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   
   const [showIndicators, setShowIndicators] = useState(true)
   const [chartLoaded, setChartLoaded] = useState(false)
@@ -190,21 +189,18 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
               width: 1, 
               style: 0,
               labelBackgroundColor: '#0a0f1c',
-              labelTextColor: '#06b6d4',
             },
             horzLine: { 
               color: '#06b6d4', 
               width: 1, 
               style: 0,
               labelBackgroundColor: '#0a0f1c',
-              labelTextColor: '#06b6d4',
             },
           },
           rightPriceScale: {
             borderColor: '#1a1f2e',
             scaleMargins: { top: 0.1, bottom: 0.2 },
             entireTextOnly: false,
-            textColor: '#8b9dc3',
           },
           timeScale: {
             borderColor: '#1a1f2e',
@@ -212,7 +208,6 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
             secondsVisible: false,
             fixLeftEdge: true,
             rightOffset: 10,
-            textColor: '#8b9dc3',
           },
           width,
           height,
@@ -241,7 +236,7 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
         })
 
         // Add series
-        seriesRef.current = chart.addCandlestickSeries({
+        seriesRef.current = chart.addSeries(lw.CandlestickSeries, {
           upColor: '#10b981',
           downColor: '#ef4444',
           wickUpColor: '#10b981',
@@ -253,7 +248,7 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
           lastValueVisible: true,
         })
 
-        ema20Ref.current = chart.addLineSeries({
+        ema20Ref.current = chart.addSeries(lw.LineSeries, {
           color: '#06b6d4',
           lineWidth: 2,
           priceLineVisible: false,
@@ -261,15 +256,15 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
           title: 'EMA 20',
         })
 
-        ema50Ref.current = chart.addLineSeries({
+        ema50Ref.current = chart.addSeries(lw.LineSeries, {
           color: '#8b5cf6',
-          lineWidth: 2.5,
+          lineWidth: 2,
           priceLineVisible: false,
           lastValueVisible: false,
           title: 'EMA 50',
         })
 
-        ema200Ref.current = chart.addLineSeries({
+        ema200Ref.current = chart.addSeries(lw.LineSeries, {
           color: '#f59e0b',
           lineWidth: 3,
           priceLineVisible: false,
@@ -277,11 +272,10 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
           title: 'EMA 200',
         })
 
-        volumeRef.current = chart.addHistogramSeries({
+        volumeRef.current = chart.addSeries(lw.HistogramSeries, {
           color: '#06b6d4',
           priceFormat: { type: 'volume' },
           priceScaleId: '',
-          scaleMargins: { top: 0.8, bottom: 0 },
         })
 
         mainChartRef.current = chart
@@ -370,7 +364,6 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
             borderColor: '#1a1f2e',
             scaleMargins: { top: 0.1, bottom: 0.1 },
             entireTextOnly: false,
-            textColor: '#8b9dc3',
           },
           timeScale: {
             borderColor: '#1a1f2e',
@@ -382,15 +375,15 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
           handleScale: { mouseWheel: false, pinch: false },
         })
 
-        rsiRef.current = chart.addLineSeries({
+        rsiRef.current = chart.addSeries(lw.LineSeries, {
           color: '#8b5cf6',
           lineWidth: 2,
           priceLineVisible: false,
         })
 
-        chart.createPriceLine({ price: 70, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true })
-        chart.createPriceLine({ price: 50, color: '#758696', lineWidth: 1, lineStyle: 2, axisLabelVisible: true })
-        chart.createPriceLine({ price: 30, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true })
+        rsiRef.current.createPriceLine({ price: 70, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true })
+        rsiRef.current.createPriceLine({ price: 50, color: '#758696', lineWidth: 1, lineStyle: 2, axisLabelVisible: true })
+        rsiRef.current.createPriceLine({ price: 30, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true })
 
         rsiChartRef.current = chart
       } catch (err) {
@@ -435,7 +428,6 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
             borderColor: '#1a1f2e',
             scaleMargins: { top: 0.1, bottom: 0.1 },
             entireTextOnly: false,
-            textColor: '#8b9dc3',
           },
           timeScale: {
             borderColor: '#1a1f2e',
@@ -447,26 +439,25 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
           handleScale: { mouseWheel: false, pinch: false },
         })
 
-        macdLineRef.current = chart.addLineSeries({
+        macdLineRef.current = chart.addSeries(lw.LineSeries, {
           color: '#06b6d4',
           lineWidth: 2,
           priceLineVisible: false,
         })
 
-        macdSignalRef.current = chart.addLineSeries({
+        macdSignalRef.current = chart.addSeries(lw.LineSeries, {
           color: '#8b5cf6',
           lineWidth: 2,
           priceLineVisible: false,
         })
 
-        macdHistRef.current = chart.addHistogramSeries({
+        macdHistRef.current = chart.addSeries(lw.HistogramSeries, {
           color: '#10b981',
           priceFormat: { type: 'price', precision: 4 },
           priceScaleId: '',
-          scaleMargins: { top: 0.5, bottom: 0 },
         })
 
-        chart.createPriceLine({ price: 0, color: '#758696', lineWidth: 1, lineStyle: 2 })
+        macdLineRef.current.createPriceLine({ price: 0, color: '#758696', lineWidth: 1, lineStyle: 2 })
 
         macdChartRef.current = chart
       } catch (err) {
@@ -504,7 +495,7 @@ const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null)
         low: Number(c.low),
         close: Number(c.close),
       }
-    }).filter(c => c.time > 0 && isFinite(c.open) && isFinite(c.close))
+    }).filter((c) => Number(c.time) > 0 && isFinite(c.open) && isFinite(c.close))
 
     if (mapped.length === 0) {
       console.warn('No valid candle data to display')
