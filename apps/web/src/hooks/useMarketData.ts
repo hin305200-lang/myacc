@@ -273,6 +273,10 @@ export const useSharedSocket = () => {
 
   useEffect(() => {
     const url = getWsBaseUrl()
+    if (!url) {
+      setSocket(null)
+      return
+    }
     if (!sharedSocket) {
       sharedSocket = io(url)
     }

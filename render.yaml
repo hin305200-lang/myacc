@@ -1,0 +1,30 @@
+# Deploy: Render Dashboard → New → Blueprint → connect hin305200-lang/myacc
+# Add DATABASE_URL + DIRECT_URL (Supabase) in the Render dashboard after create.
+
+services:
+  - type: web
+    name: myacc-api
+    runtime: node
+    plan: free
+    buildCommand: >-
+      npm ci &&
+      npx prisma generate --schema=apps/api/prisma/schema.prisma &&
+      npm run build --workspace @nexus-trade/api
+    startCommand: >-
+      cd apps/api &&
+      npx prisma migrate deploy --schema=prisma/schema.prisma &&
+      node dist/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://barrattcookelimited.com,https://www.barrattcookelimited.com
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
