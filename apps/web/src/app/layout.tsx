@@ -3,8 +3,9 @@ import './globals.css'
 import Providers from './providers'
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://barrattcookelimited.com'),
   title: 'Nexus Trade - Trading Platform',
-  description: 'Professional Trading Platform Simulation',
+  description: 'Professional trading platform at Barratt Cooke Limited',
 }
 
 export default function RootLayout({
