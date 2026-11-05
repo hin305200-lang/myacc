@@ -1,5 +1,7 @@
 datasource db {
-  provider = "sqlite"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -26,6 +28,8 @@ model User {
   closedTrades    ClosedTrade[]
   transactions    Transaction[]
   depositRequests DepositRequest[]
+  withdrawalRequests WithdrawalRequest[]
+  favorites       UserFavorite[]
   messages        Message[]
 }
 
@@ -103,6 +107,28 @@ model DepositRequest {
   note       String?
   createdAt  DateTime @default(now())
   resolvedAt DateTime?
+}
+
+model WithdrawalRequest {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  amount        Decimal
+  status        String   @default("PENDING")
+  payoutDetails String?
+  note          String?
+  createdAt     DateTime @default(now())
+  resolvedAt    DateTime?
+}
+
+model UserFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  symbol    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, symbol])
 }
 
 model Message {

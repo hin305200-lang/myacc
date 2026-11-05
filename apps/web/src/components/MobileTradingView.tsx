@@ -11,6 +11,7 @@ interface MobileTradingViewProps {
   selectedSymbol: any
   symbols: any[]
   symbolMeta: Record<string, { icon: string }>
+  dataSource?: 'live' | 'simulated'
   onSelectSymbol: (symbol: any) => void
   lotSize: number
   onLotSizeChange: (size: number) => void
@@ -26,6 +27,7 @@ export default function MobileTradingView({
   selectedSymbol,
   symbols,
   symbolMeta,
+  dataSource = 'simulated',
   onSelectSymbol,
   lotSize,
   onLotSizeChange,
@@ -88,14 +90,12 @@ export default function MobileTradingView({
         {activeView === 'market' && (
           <div className="h-full bg-[#1a1d2e]">
             <MarketWatch
-              symbols={symbols.map((s) => ({
-                ...s,
-                icon: symbolMeta[s.symbol]?.icon,
-              }))}
+              symbols={symbols}
               selectedSymbol={selectedSymbol}
+              dataSource={dataSource}
               onSelectSymbol={(symbol) => {
                 onSelectSymbol(symbol)
-                setActiveView('chart') // Switch to chart when symbol selected
+                setActiveView('chart')
               }}
             />
           </div>

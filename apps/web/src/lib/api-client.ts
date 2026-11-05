@@ -57,6 +57,21 @@ export const apiClient = {
     }
   },
 
+  async delete<T>(path: string, token?: string): Promise<T> {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}))
+      throw new Error(error.error ?? 'Request failed')
+    }
+    return res.json()
+  },
+
   async put<T>(path: string, body: unknown, token?: string): Promise<T> {
     const res = await fetch(`${API_URL}${path}`, {
       method: 'PUT',

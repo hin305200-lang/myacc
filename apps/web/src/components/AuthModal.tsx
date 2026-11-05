@@ -15,6 +15,7 @@ export function AuthModal({ open, onClose }: Props) {
   const { setCredentials } = useAuthStore()
   const [mode, setMode] = useState<AuthMode>('login')
   const [fullName, setFullName] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -71,10 +72,11 @@ export function AuthModal({ open, onClose }: Props) {
         refreshToken: string
         user: UserPayload
         message?: string
-      }>('/auth/register', { 
-        fullName: nextFullName || 'New Trader', 
-        email: nextEmail, 
-        password: nextPassword 
+      }>('/auth/register', {
+        fullName: nextFullName || 'New Trader',
+        email: nextEmail,
+        password: nextPassword,
+        phoneNumber: phoneNumber.trim() || undefined,
       })
       
       // Ensure we have the required fields
@@ -153,18 +155,29 @@ export function AuthModal({ open, onClose }: Props) {
 
         <div className="mt-5 space-y-3" onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}>
           {mode === 'register' && (
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Full name</label>
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 focus:border-accent-purple focus:bg-white/10"
-                placeholder="Your name"
-                minLength={3}
-                required
-              />
-              <p className="text-xs text-slate-500">Minimum 3 characters</p>
-            </div>
+            <>
+              <div className="space-y-1">
+                <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Full name</label>
+                <input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 focus:border-accent-purple focus:bg-white/10"
+                  placeholder="Your name"
+                  minLength={3}
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Phone (optional)</label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 focus:border-accent-purple focus:bg-white/10"
+                  placeholder="+1 555 000 0000"
+                />
+              </div>
+            </>
           )}
 
           <div className="space-y-1">
@@ -204,7 +217,7 @@ export function AuthModal({ open, onClose }: Props) {
               Use instant demo login
             </button>
             <button
-              onClick={handleSubmit}
+              onClick={() => void handleSubmit()}
               disabled={loading}
               className="inline-flex justify-center rounded-lg bg-gradient-to-r from-[#7c3aed] via-[#2563eb] to-[#22d3ee] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:opacity-90 disabled:opacity-60"
             >

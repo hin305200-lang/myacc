@@ -55,6 +55,15 @@ export default function AdminDashboard() {
     enabled: !!accessToken && user?.role === 'ADMIN',
   })
 
+  const { data: withdrawals, refetch: refetchWithdrawals } = useQuery({
+    queryKey: ['admin-withdrawals'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: any[] }>('/admin/withdrawals', accessToken ?? undefined)
+      return res.data
+    },
+    enabled: !!accessToken && user?.role === 'ADMIN',
+  })
+
   const handleGameOutcome = async () => {
     await apiClient.post(
       '/admin/game/force-outcome',
@@ -141,6 +150,69 @@ export default function AdminDashboard() {
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-bg-panel border border-[#1e293b] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">Withdrawal Requests</h2>
+              <button onClick={() => refetchWithdrawals()} className="text-xs text-[#94a3b8]">
+                Refresh
+              </button>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-auto pr-2">
+              {withdrawals?.map((req) => (
+                <div key={req.id} className="border border-[#1e293b] rounded-lg p-3 text-sm">
+                  <div className="flex justify-between">
+                    <span>{req.user?.fullName ?? req.userId}</span>
+                    <span className="font-mono">${Number(req.amount).toFixed(2)}</span>
+                  </div>
+                  {req.payoutDetails && (
+                    <p className="text-xs text-[#94a3b8] mt-1 truncate">{req.payoutDetails}</p>
+                  )}
+                  <div className="flex justify-between text-xs text-[#94a3b8] mt-1">
+                    <span>{req.status}</span>
+                    <span>{new Date(req.createdAt).toLocaleString()}</span>
+                  </div>
+                  {req.status === 'PENDING' && (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        className="flex-1 py-1 rounded bg-green-600/20 text-green-300 text-xs"
+                        onClick={() =>
+                          apiClient
+                            .post(
+                              `/admin/withdrawals/${req.id}/resolve`,
+                              { action: 'APPROVE' },
+                              accessToken ?? undefined
+                            )
+                            .then(() => {
+                              refetchWithdrawals()
+                              refetch()
+                            })
+                        }
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="flex-1 py-1 rounded bg-red-600/20 text-red-300 text-xs"
+                        onClick={() =>
+                          apiClient
+                            .post(
+                              `/admin/withdrawals/${req.id}/resolve`,
+                              { action: 'REJECT' },
+                              accessToken ?? undefined
+                            )
+                            .then(() => refetchWithdrawals())
+                        }
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {!withdrawals?.length && (
+                <p className="text-xs text-[#94a3b8]">No withdrawal requests</p>
+              )}
+            </div>
+          </div>
           <div className="bg-bg-panel border border-[#1e293b] rounded-xl p-4 space-y-4">
             <h2 className="text-lg font-semibold">Game Mode Controls</h2>
             <div className="space-y-2">

@@ -6,40 +6,56 @@ import { io, Socket } from 'socket.io-client'
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/auth-store'
 
+const categoryFor = (symbol: string): MarketSymbol['category'] => {
+  const forex = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'EURNOK', 'USDQAR', 'USDMXN']
+  const crypto = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD']
+  const commodities = ['XAUUSD', 'XAGUSD', 'UKOIL', 'USOIL']
+  const indices = ['SPX500', 'NAS100', 'DJI30', 'DAX40']
+  if (forex.includes(symbol)) return 'forex'
+  if (crypto.includes(symbol)) return 'crypto'
+  if (commodities.includes(symbol)) return 'commodities'
+  if (indices.includes(symbol)) return 'indices'
+  return 'stocks'
+}
+
+const withMeta = (row: Omit<MarketSymbol, 'category' | 'dataSource' | 'tradable' | 'marketStatus'>): MarketSymbol => ({
+  ...row,
+  category: categoryFor(row.symbol),
+  dataSource: 'simulated',
+  tradable: true,
+  marketStatus: 'open',
+})
+
 const fallbackSymbols: MarketSymbol[] = [
   // Forex
-  { symbol: 'EURUSD', price: 1.1023, bid: 1.1022, ask: 1.1024, spread: 0.0002, changePercent: 0.12 },
-  { symbol: 'GBPUSD', price: 1.2791, bid: 1.2790, ask: 1.2792, spread: 0.0002, changePercent: -0.05 },
-  { symbol: 'USDJPY', price: 151.34, bid: 151.33, ask: 151.35, spread: 0.02, changePercent: 0.08 },
-  { symbol: 'AUDUSD', price: 0.665, bid: 0.6649, ask: 0.6651, spread: 0.0002, changePercent: 0.15 },
-  { symbol: 'EURNOK', price: 11.25, bid: 11.248, ask: 11.252, spread: 0.004, changePercent: 0.18 },
-  { symbol: 'USDQAR', price: 3.64, bid: 3.639, ask: 3.641, spread: 0.002, changePercent: 0.05 },
-  { symbol: 'USDMXN', price: 17.0, bid: 16.99, ask: 17.01, spread: 0.02, changePercent: 0.12 },
-  // Crypto
-  { symbol: 'BTCUSD', price: 68250, bid: 68240, ask: 68260, spread: 20, changePercent: 1.2 },
-  { symbol: 'ETHUSD', price: 3450, bid: 3445, ask: 3455, spread: 10, changePercent: 0.8 },
-  { symbol: 'SOLUSD', price: 110, bid: 109.95, ask: 110.05, spread: 0.1, changePercent: 2.5 },
-  { symbol: 'XRPUSD', price: 0.62, bid: 0.6198, ask: 0.6202, spread: 0.0004, changePercent: 0.65 },
-  // Commodities
-  { symbol: 'XAUUSD', price: 2375.50, bid: 2375.25, ask: 2375.75, spread: 0.5, changePercent: 0.25 },
-  { symbol: 'XAGUSD', price: 28.40, bid: 28.38, ask: 28.42, spread: 0.04, changePercent: 0.35 },
-  { symbol: 'UKOIL', price: 79.20, bid: 79.18, ask: 79.22, spread: 0.04, changePercent: -0.20 },
-  { symbol: 'USOIL', price: 76.50, bid: 76.48, ask: 76.52, spread: 0.04, changePercent: -0.15 },
-  // Indices
-  { symbol: 'SPX500', price: 5450, bid: 5448, ask: 5452, spread: 4, changePercent: 0.35 },
-  { symbol: 'NAS100', price: 18750, bid: 18745, ask: 18755, spread: 10, changePercent: 0.42 },
-  { symbol: 'DJI30', price: 39850, bid: 39840, ask: 39860, spread: 20, changePercent: 0.28 },
-  { symbol: 'DAX40', price: 18800, bid: 18795, ask: 18805, spread: 10, changePercent: 0.38 },
-  // Stocks
-  { symbol: 'AAPL', price: 225.50, bid: 225.45, ask: 225.55, spread: 0.1, changePercent: 0.55 },
-  { symbol: 'MSFT', price: 465.20, bid: 465.15, ask: 465.25, spread: 0.1, changePercent: 0.32 },
-  { symbol: 'AMZN', price: 195.80, bid: 195.75, ask: 195.85, spread: 0.1, changePercent: 0.18 },
-  { symbol: 'TSLA', price: 240.30, bid: 240.25, ask: 240.35, spread: 0.1, changePercent: -0.25 },
-  { symbol: 'NVDA', price: 495.75, bid: 495.70, ask: 495.80, spread: 0.1, changePercent: 1.15 },
-  { symbol: 'GOOGL', price: 145.60, bid: 145.55, ask: 145.65, spread: 0.1, changePercent: 0.48 },
-  { symbol: 'META', price: 485.20, bid: 485.15, ask: 485.25, spread: 0.1, changePercent: 0.65 },
-  { symbol: 'NFLX', price: 620, bid: 619.95, ask: 620.05, spread: 0.1, changePercent: 0.85 },
-  { symbol: 'AMD', price: 165, bid: 164.95, ask: 165.05, spread: 0.1, changePercent: 1.25 },
+  withMeta({ symbol: 'EURUSD', price: 1.1023, bid: 1.1022, ask: 1.1024, spread: 0.0002, changePercent: 0.12 }),
+  withMeta({ symbol: 'GBPUSD', price: 1.2791, bid: 1.2790, ask: 1.2792, spread: 0.0002, changePercent: -0.05 }),
+  withMeta({ symbol: 'USDJPY', price: 151.34, bid: 151.33, ask: 151.35, spread: 0.02, changePercent: 0.08 }),
+  withMeta({ symbol: 'AUDUSD', price: 0.665, bid: 0.6649, ask: 0.6651, spread: 0.0002, changePercent: 0.15 }),
+  withMeta({ symbol: 'EURNOK', price: 11.25, bid: 11.248, ask: 11.252, spread: 0.004, changePercent: 0.18 }),
+  withMeta({ symbol: 'USDQAR', price: 3.64, bid: 3.639, ask: 3.641, spread: 0.002, changePercent: 0.05 }),
+  withMeta({ symbol: 'USDMXN', price: 17.0, bid: 16.99, ask: 17.01, spread: 0.02, changePercent: 0.12 }),
+  withMeta({ symbol: 'BTCUSD', price: 68250, bid: 68240, ask: 68260, spread: 20, changePercent: 1.2 }),
+  withMeta({ symbol: 'ETHUSD', price: 3450, bid: 3445, ask: 3455, spread: 10, changePercent: 0.8 }),
+  withMeta({ symbol: 'SOLUSD', price: 110, bid: 109.95, ask: 110.05, spread: 0.1, changePercent: 2.5 }),
+  withMeta({ symbol: 'XRPUSD', price: 0.62, bid: 0.6198, ask: 0.6202, spread: 0.0004, changePercent: 0.65 }),
+  withMeta({ symbol: 'XAUUSD', price: 2375.50, bid: 2375.25, ask: 2375.75, spread: 0.5, changePercent: 0.25 }),
+  withMeta({ symbol: 'XAGUSD', price: 28.40, bid: 28.38, ask: 28.42, spread: 0.04, changePercent: 0.35 }),
+  withMeta({ symbol: 'UKOIL', price: 79.20, bid: 79.18, ask: 79.22, spread: 0.04, changePercent: -0.20 }),
+  withMeta({ symbol: 'USOIL', price: 76.50, bid: 76.48, ask: 76.52, spread: 0.04, changePercent: -0.15 }),
+  withMeta({ symbol: 'SPX500', price: 5450, bid: 5448, ask: 5452, spread: 4, changePercent: 0.35 }),
+  withMeta({ symbol: 'NAS100', price: 18750, bid: 18745, ask: 18755, spread: 10, changePercent: 0.42 }),
+  withMeta({ symbol: 'DJI30', price: 39850, bid: 39840, ask: 39860, spread: 20, changePercent: 0.28 }),
+  withMeta({ symbol: 'DAX40', price: 18800, bid: 18795, ask: 18805, spread: 10, changePercent: 0.38 }),
+  withMeta({ symbol: 'AAPL', price: 225.50, bid: 225.45, ask: 225.55, spread: 0.1, changePercent: 0.55 }),
+  withMeta({ symbol: 'MSFT', price: 465.20, bid: 465.15, ask: 465.25, spread: 0.1, changePercent: 0.32 }),
+  withMeta({ symbol: 'AMZN', price: 195.80, bid: 195.75, ask: 195.85, spread: 0.1, changePercent: 0.18 }),
+  withMeta({ symbol: 'TSLA', price: 240.30, bid: 240.25, ask: 240.35, spread: 0.1, changePercent: -0.25 }),
+  withMeta({ symbol: 'NVDA', price: 495.75, bid: 495.70, ask: 495.80, spread: 0.1, changePercent: 1.15 }),
+  withMeta({ symbol: 'GOOGL', price: 145.60, bid: 145.55, ask: 145.65, spread: 0.1, changePercent: 0.48 }),
+  withMeta({ symbol: 'META', price: 485.20, bid: 485.15, ask: 485.25, spread: 0.1, changePercent: 0.65 }),
+  withMeta({ symbol: 'NFLX', price: 620, bid: 619.95, ask: 620.05, spread: 0.1, changePercent: 0.85 }),
+  withMeta({ symbol: 'AMD', price: 165, bid: 164.95, ask: 165.05, spread: 0.1, changePercent: 1.25 }),
 ]
 
 // Base prices for all symbols (matching backend fallbackSeed)
@@ -111,6 +127,38 @@ export type MarketSymbol = {
   ask: number
   spread: number
   changePercent: number
+  category: 'forex' | 'crypto' | 'stocks' | 'commodities' | 'indices'
+  dataSource: 'live' | 'simulated'
+  tradable: boolean
+  marketStatus: 'open'
+}
+
+export type AccountSummary = {
+  id?: string
+  fullName?: string
+  email?: string
+  balance: number
+  equity: number
+  freeMargin: number
+  margin: number
+  marginLevel: number
+  leverage?: number
+}
+
+function normalizeAccountSummary(raw: unknown): AccountSummary | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as Record<string, unknown>
+  return {
+    id: o.id as string | undefined,
+    fullName: o.fullName as string | undefined,
+    email: o.email as string | undefined,
+    balance: Number(o.balance ?? 0),
+    equity: Number(o.equity ?? 0),
+    freeMargin: Number(o.freeMargin ?? 0),
+    margin: Number(o.margin ?? 0),
+    marginLevel: Number(o.marginLevel ?? 0),
+    leverage: o.leverage != null ? Number(o.leverage) : undefined,
+  }
 }
 
 export type Candle = {
@@ -121,12 +169,32 @@ export type Candle = {
   close: number
 }
 
+export const useMarketCatalog = () => {
+  const { data } = useQuery({
+    queryKey: ['market-catalog'],
+    queryFn: async () => {
+      const response = await apiClient.get<{
+        data: { dataSource: 'live' | 'simulated'; dataSourceNote: string }
+      }>('/market/catalog')
+      return response.data
+    },
+    staleTime: 60_000,
+  })
+  return data
+}
+
 export const useMarketSymbols = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['market-symbols'],
     queryFn: async () => {
       const response = await apiClient.get<{ data: MarketSymbol[] }>('/market/symbols')
-      return response.data
+      return response.data.map((s) => ({
+        ...s,
+        changePercent: Number(s.changePercent),
+        bid: Number(s.bid),
+        ask: Number(s.ask),
+        price: Number(s.price),
+      }))
     },
     refetchInterval: 60_000,
   })
@@ -253,8 +321,11 @@ export const useAccountSummary = () => {
   const queryClient = useQueryClient()
   useEffect(() => {
     if (!socket) return
-    const handler = (account: any) => {
-      queryClient.setQueryData(['account-summary'], account)
+    const handler = (account: unknown) => {
+      const normalized = normalizeAccountSummary(account)
+      if (normalized) {
+        queryClient.setQueryData(['account-summary'], normalized)
+      }
     }
     socket.on('account:update', handler)
     return () => {
@@ -265,12 +336,57 @@ export const useAccountSummary = () => {
   const { data } = useQuery({
     queryKey: ['account-summary'],
     queryFn: async () => {
-      const response = await apiClient.get<{ data: any }>('/account/summary', token ?? undefined)
-      return response.data
+      const response = await apiClient.get<{ data: unknown }>('/account/summary', token ?? undefined)
+      return normalizeAccountSummary(response.data)
     },
     enabled: !!token,
     refetchInterval: 30_000,
   })
   return data
+}
+
+export type AccountDashboard = {
+  balance: number
+  equity: number
+  freeMargin: number
+  margin: number
+  marginLevel: number
+  invested: number
+  unrealizedPnl: number
+  dailyRealizedPnl: number
+  openPositionsCount: number
+  recentDeposits: { id: string; amount: number; status: string; createdAt: string }[]
+  recentWithdrawals: { id: string; amount: number; status: string; createdAt: string }[]
+  favoriteSymbols: string[]
+}
+
+export const useAccountDashboard = () => {
+  const token = useAuthStore((state) => state.accessToken)
+  return useQuery({
+    queryKey: ['account-dashboard'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: AccountDashboard }>(
+        '/account/dashboard',
+        token ?? undefined
+      )
+      return response.data
+    },
+    enabled: !!token,
+    refetchInterval: 15_000,
+  })
+}
+
+export const useTransactions = () => {
+  const token = useAuthStore((state) => state.accessToken)
+  return useQuery({
+    queryKey: ['account-transactions'],
+    queryFn: async () => {
+      const response = await apiClient.get<{
+        data: { id: string; type: string; amount: number; balanceAfter: number; note?: string; createdAt: string }[]
+      }>('/account/transactions', token ?? undefined)
+      return response.data
+    },
+    enabled: !!token,
+  })
 }
 

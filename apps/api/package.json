@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
-    "prisma:migrate": "prisma migrate dev --schema=prisma/schema.prisma"
+    "prisma:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
+    "db:migrate-from-sqlite": "ts-node --transpile-only --require tsconfig-paths/register scripts/migrate-sqlite-to-postgres.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
@@ -23,8 +24,11 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.12.12",
+    "better-sqlite3": "^11.7.0",
     "prisma": "6.1.0",
+    "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.4.5"

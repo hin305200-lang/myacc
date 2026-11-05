@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { tradingEngine } from '../services/trading-engine.service'
+import { priceFeedService } from '../services/price-feed.service'
 import { prisma } from '../lib/prisma'
 import { PositionStatus } from '../types/enums'
 
@@ -20,6 +21,10 @@ export const registerOrderRoutes = (app: FastifyInstance) => {
       const parsed = orderSchema.safeParse(request.body)
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.flatten() })
+      }
+
+      if (!priceFeedService.isTradableSymbol(parsed.data.symbol)) {
+        return reply.status(400).send({ error: 'Symbol is not available for trading' })
       }
 
       try {

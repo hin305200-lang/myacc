@@ -3,8 +3,11 @@ npm-debug.log*
 .DS_Store
 .env
 .env.*
+!.env.example
+!**/.env.example
 apps/api/.env
 apps/web/.env
+*.db
 apps/web/.next
 apps/web/out
 apps/api/dist

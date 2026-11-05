@@ -6,7 +6,7 @@ import { UserRole, UserStatus } from '../types/enums'
 export class AuthService {
   constructor(private app: FastifyInstance) {}
 
-  async registerUser(input: { fullName: string; email: string; password: string }) {
+  async registerUser(input: { fullName: string; email: string; password: string; phoneNumber?: string }) {
     const existing = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } })
     if (existing) {
       throw new Error('Email already registered')
@@ -20,6 +20,7 @@ export class AuthService {
       data: {
         fullName: input.fullName,
         email: input.email.toLowerCase(),
+        phoneNumber: input.phoneNumber?.trim() || null,
         passwordHash,
         role: 'USER',
         status: 'ACTIVE',

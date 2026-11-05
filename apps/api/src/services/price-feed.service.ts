@@ -135,6 +135,27 @@ class PriceFeedService extends EventEmitter {
     return Array.from(this.cache.values())
   }
 
+  getDataSourceMode(): 'live' | 'simulated' {
+    return this.apiKey ? 'live' : 'simulated'
+  }
+
+  getSymbolCatalog() {
+    return SYMBOL_CONFIG.map((config) => ({
+      symbol: config.brokerSymbol,
+      category: config.category,
+      providerSymbol: config.providerSymbol,
+      tradable: true,
+    }))
+  }
+
+  isTradableSymbol(symbol: string) {
+    return SYMBOL_CONFIG.some((config) => config.brokerSymbol === symbol)
+  }
+
+  getSymbolCategory(symbol: string): SymbolConfig['category'] | null {
+    return SYMBOL_CONFIG.find((config) => config.brokerSymbol === symbol)?.category ?? null
+  }
+
   async getCandles(symbol: string): Promise<Candle[]> {
     if (!this.apiKey) {
       return this.generateFallbackCandles(symbol)

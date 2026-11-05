@@ -125,6 +125,71 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       return { success: true }
     })
 
+    instance.get('/admin/withdrawals', async () => {
+      const requests = await prisma.withdrawalRequest.findMany({
+        include: { user: { select: { fullName: true, email: true } } },
+        orderBy: { createdAt: 'desc' },
+      })
+      return {
+        data: requests.map((row) => ({ ...row, amount: Number(row.amount) })),
+      }
+    })
+
+    instance.post('/admin/withdrawals/:id/resolve', async (request, reply) => {
+      const paramsSchema = z.object({ id: z.string().cuid() })
+      const bodySchema = z.object({
+        action: z.enum(['APPROVE', 'REJECT']),
+        note: z.string().optional(),
+      })
+      const params = paramsSchema.parse(request.params)
+      const body = bodySchema.safeParse(request.body)
+      if (!body.success) {
+        return reply.status(400).send({ error: body.error.flatten() })
+      }
+
+      const withdrawal = await prisma.withdrawalRequest.findUnique({ where: { id: params.id } })
+      if (!withdrawal || withdrawal.status !== 'PENDING') {
+        return reply.status(404).send({ error: 'Request not found' })
+      }
+
+      const status = body.data.action === 'APPROVE' ? 'APPROVED' : 'REJECTED'
+      await prisma.withdrawalRequest.update({
+        where: { id: params.id },
+        data: { status, note: body.data.note, resolvedAt: new Date() },
+      })
+
+      if (status === 'APPROVED') {
+        const user = await prisma.user.findUnique({ where: { id: withdrawal.userId } })
+        if (!user) {
+          return reply.status(404).send({ error: 'User not found' })
+        }
+        const amount = Number(withdrawal.amount)
+        if (amount > Number(user.freeMargin)) {
+          return reply.status(400).send({ error: 'User no longer has sufficient free margin' })
+        }
+        const updated = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            balance: Number(user.balance) - amount,
+            equity: Number(user.equity) - amount,
+            freeMargin: Number(user.freeMargin) - amount,
+          },
+        })
+        await prisma.transaction.create({
+          data: {
+            userId: user.id,
+            type: 'WITHDRAWAL',
+            amount: -amount,
+            balanceBefore: user.balance,
+            balanceAfter: updated.balance,
+            note: body.data.note ?? withdrawal.payoutDetails,
+          },
+        })
+      }
+
+      return { success: true }
+    })
+
     instance.post('/admin/game/force-outcome', async (request, reply) => {
       const bodySchema = z.object({
         userId: z.string().cuid(),

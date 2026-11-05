@@ -17,7 +17,14 @@ import { AuthModal } from '@/components/AuthModal'
 import { Toast } from '@/components/Toast'
 import { useAuthStore, type UserPayload } from '@/stores/auth-store'
 import { apiClient } from '@/lib/api-client'
-import { useAccountSummary, useOpenPositions, useSymbolsWithSocket, usePriceSocket } from '@/hooks/useMarketData'
+import {
+  useAccountSummary,
+  useOpenPositions,
+  useSymbolsWithSocket,
+  usePriceSocket,
+  useMarketCatalog,
+} from '@/hooks/useMarketData'
+import { contractSize } from '@/lib/contract-sizes'
 import { useQueryClient } from '@tanstack/react-query'
 
 const symbolMeta: Record<string, { icon: string }> = {
@@ -91,6 +98,8 @@ export default function TradingPlatform() {
   const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? 'password123'
 
   const symbols = useSymbolsWithSocket()
+  const marketCatalog = useMarketCatalog()
+  const dataSource = marketCatalog?.dataSource ?? symbols[0]?.dataSource ?? 'simulated'
   const { snapshot: priceSnapshot } = usePriceSocket()
   const [selectedSymbol, setSelectedSymbol] = useState(symbols[0])
   const queryClient = useQueryClient()
@@ -154,11 +163,11 @@ export default function TradingPlatform() {
         : Number(order.currentPrice)
 
       // Calculate real-time profit
-      const contractSize = order.symbol === 'XAUUSD' ? 100 : order.symbol === 'XAGUSD' ? 5000 : order.symbol === 'BTCUSD' ? 1 : 100000
+      const size = contractSize(order.symbol)
       const priceDiff = order.side === 'BUY' 
         ? currentPrice - Number(order.openPrice)
         : Number(order.openPrice) - currentPrice
-      const realTimeProfit = priceDiff * contractSize * Number(order.lotSize)
+      const realTimeProfit = priceDiff * size * Number(order.lotSize)
 
       return {
         id: order.id,
@@ -271,6 +280,7 @@ export default function TradingPlatform() {
                 selectedSymbol={selectedSymbol}
                 symbols={symbols}
                 symbolMeta={symbolMeta}
+                dataSource={dataSource}
                 onSelectSymbol={setSelectedSymbol}
                 lotSize={lotSize}
                 onLotSizeChange={setLotSize}
@@ -307,12 +317,10 @@ export default function TradingPlatform() {
               {/* Market Watch (Center-Right) */}
               <div className="w-[280px] xl:w-[300px] border-l border-[#1e293b] flex-shrink-0">
                 <MarketWatch
-                  symbols={symbols.map((s) => ({
-                    ...s,
-                    icon: symbolMeta[s.symbol]?.icon,
-                  }))}
+                  symbols={symbols}
                   selectedSymbol={selectedSymbol}
                   onSelectSymbol={setSelectedSymbol}
+                  dataSource={dataSource}
                 />
               </div>
 
