@@ -5,9 +5,11 @@
  *   2. DATABASE_URL + DIRECT_URL in apps/api/.env point at Supabase
  *
  * Usage (from apps/api):
+ *   npm install -D better-sqlite3 @types/better-sqlite3
  *   npm run db:migrate-from-sqlite
  */
 import path from 'node:path'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 import Database from 'better-sqlite3'
 import { PrismaClient } from '@prisma/client'
 import dotenv from 'dotenv'
