@@ -1,5 +1,6 @@
 # Deploy: Render Dashboard → New → Blueprint → connect hin305200-lang/myacc
-# Add DATABASE_URL + DIRECT_URL (Supabase) in the Render dashboard after create.
+# Add DATABASE_URL + DIRECT_URL (Supabase pooler URLs) in the Render dashboard after create.
+# Do NOT use db.*.supabase.co on Render — use aws-0-* .pooler.supabase.com (6543 + 5432). See docs/LIVE_API_SETUP.md.
 
 services:
   - type: web

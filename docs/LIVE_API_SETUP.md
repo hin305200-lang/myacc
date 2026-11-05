@@ -19,10 +19,17 @@ The Vercel site is **frontend only**. Sign-up calls `/backend/auth/register`, wh
 1. [render.com](https://render.com) → **New → Blueprint**
 2. Connect repo **`hin305200-lang/myacc`**
 3. Render reads **`render.yaml`** and creates **`myacc-api`**
-4. In the service **Environment**, set:
-   - `DATABASE_URL` (Supabase pooled)
-   - `DIRECT_URL` (Supabase direct)
-5. Wait until **Live** — open `https://myacc-api.onrender.com/health` → `{"status":"ok",...}`
+4. In the service **Environment**, set **pooler** URLs from Supabase (**Settings → Database → Connection string**). Do **not** use the host `db.xxxx.supabase.co` on Render — it often fails with **P1001** (IPv6 / unreachable).
+
+   | Render variable | Supabase UI | Example shape |
+   |-----------------|-------------|----------------|
+   | `DATABASE_URL` | **Transaction pooler**, port **6543** | `postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1` |
+   | `DIRECT_URL` | **Session pooler**, port **5432** (same pooler host, not `db.…`) | `postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:5432/postgres` |
+
+   URL-encode special characters in the password (`@`, `#`, etc.).
+
+5. In Supabase **Project Settings**, confirm the project is **not paused** (free tier pauses after inactivity).
+6. Wait until **Live** — open `https://myacc-api.onrender.com/health` → `{"status":"ok",...}`
 
 ---
 

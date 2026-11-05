@@ -66,7 +66,7 @@ Confirm login, wallet balances, and open positions match what you had on SQLite.
 
 | Issue | Fix |
 |--------|-----|
-| `P1001` can't reach database | Check Supabase IP allowlist (default allows all); verify password and host. |
+| `P1001` can't reach database | Unpause project in Supabase; verify password. On **Render/Railway**, use **pooler** hosts (`aws-0-….pooler.supabase.com`), not `db.….supabase.co:5432` — set `DIRECT_URL` to **session pooler** port 5432 and `DATABASE_URL` to **transaction pooler** port 6543 with `?pgbouncer=true`. |
 | Migration fails on pooler | Use `DIRECT_URL` on 5432; ensure `directUrl` is set in `schema.prisma`. |
 | Empty Postgres after migrate | Point `SQLITE_DATABASE_PATH` at the file that has data (`./dev.db`). |
 | Prisma client out of date | `npm run prisma:generate` in `apps/api`. |
