@@ -8,10 +8,7 @@ services:
     runtime: node
     plan: free
     buildCommand: npm ci && npm run build --workspace @nexus-trade/api
-    startCommand: >-
-      cd apps/api &&
-      npx prisma migrate deploy --schema=prisma/schema.prisma &&
-      node dist/server.js
+    startCommand: bash apps/api/scripts/render-start.sh
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
