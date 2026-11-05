@@ -3,7 +3,7 @@ import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import websocket from '@fastify/websocket'
 import { Server as SocketIOServer } from 'socket.io'
-import { env } from './config/env'
+import { env, getAllowedCorsOrigins } from './config/env'
 import { registerHealthRoutes } from './routes/health'
 import { registerMarketRoutes } from './routes/market'
 import { registerOrderRoutes } from './routes/orders'
@@ -21,9 +21,10 @@ const buildServer = () => {
     logger: true
   })
 
+  const corsOrigins = getAllowedCorsOrigins()
   app.register(cors, {
-    origin: true,
-    credentials: true
+    origin: corsOrigins === true ? true : corsOrigins,
+    credentials: true,
   })
 
   app.register(jwt, {
@@ -56,10 +57,12 @@ const buildServer = () => {
 
   app.addHook('onReady', async () => {
     const server = app.server
+    const socketOrigins = corsOrigins === true ? '*' : corsOrigins
     io = new SocketIOServer(server, {
       cors: {
-        origin: '*'
-      }
+        origin: socketOrigins,
+        credentials: true,
+      },
     })
     app.decorate('io', io)
     priceFeedService.on('price:update', (snapshot) => {

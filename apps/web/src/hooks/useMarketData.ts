@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { io, Socket } from 'socket.io-client'
 import { apiClient } from '@/lib/api-client'
+import { getWsBaseUrl } from '@/lib/public-env'
 import { useAuthStore } from '@/stores/auth-store'
 
 const categoryFor = (symbol: string): MarketSymbol['category'] => {
@@ -271,7 +272,7 @@ export const useSharedSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(sharedSocket)
 
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:4000'
+    const url = getWsBaseUrl()
     if (!sharedSocket) {
       sharedSocket = io(url)
     }

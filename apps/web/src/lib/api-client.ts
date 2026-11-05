@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { getApiBaseUrl } from './public-env'
+
+const API_URL = getApiBaseUrl()
 
 export const apiClient = {
   async get<T>(path: string, token?: string): Promise<T> {

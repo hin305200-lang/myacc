@@ -25,6 +25,7 @@ import {
   useMarketCatalog,
 } from '@/hooks/useMarketData'
 import { contractSize } from '@/lib/contract-sizes'
+import { isDemoAutoLoginEnabled } from '@/lib/public-env'
 import { useQueryClient } from '@tanstack/react-query'
 
 const symbolMeta: Record<string, { icon: string }> = {
@@ -113,6 +114,11 @@ export default function TradingPlatform() {
 
   useEffect(() => {
     if (accessToken || authAttempted) return
+    if (!isDemoAutoLoginEnabled()) {
+      setAuthAttempted(true)
+      setShowAuth(true)
+      return
+    }
     const ensureAuth = async () => {
       setAuthAttempted(true)
       try {
