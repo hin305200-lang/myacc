@@ -9,7 +9,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only --require tsconfig-paths/register --ignore-watch node_modules src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "prisma generate --schema=prisma/schema.prisma && esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --packages=external",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
@@ -30,10 +30,11 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.12.12",
     "better-sqlite3": "^11.7.0",
+    "esbuild": "^0.25.0",
     "prisma": "6.1.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.4.5"
+    "typescript": "5.6.3"
   }
 }
