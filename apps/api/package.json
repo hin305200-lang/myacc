@@ -9,7 +9,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only --require tsconfig-paths/register --ignore-watch node_modules src/server.ts",
-    "build": "prisma generate --schema=prisma/schema.prisma && esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --packages=external",
+    "build": "prisma generate --schema=prisma/schema.prisma && npx esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --packages=external",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema=prisma/schema.prisma",

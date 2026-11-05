@@ -6,7 +6,7 @@ services:
     name: myacc-api
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build --workspace @nexus-trade/api
+    buildCommand: npm ci --include=dev && npm run build --workspace @nexus-trade/api
     startCommand: >-
       cd apps/api &&
       npx prisma migrate deploy --schema=prisma/schema.prisma &&
