@@ -6,7 +6,7 @@ import TradeMarketsLayout from '@/components/TradeMarketsLayout'
 import MarketWatch from '@/components/MarketWatch'
 import OrderPanel from '@/components/OrderPanel'
 import BottomPanel from '@/components/BottomPanel'
-import MobileTradingView from '@/components/MobileTradingView'
+import MobileBankingExperience from '@/components/MobileBankingExperience'
 import WalletPage from '@/components/WalletPage'
 import SettingsPage from '@/components/SettingsPage'
 import NotificationsPage from '@/components/NotificationsPage'
@@ -280,23 +280,6 @@ export default function TradingPlatform() {
       default:
         return (
           <>
-            {/* Mobile View - Only visible on mobile */}
-            <div className="lg:hidden flex-1 overflow-hidden">
-              <MobileTradingView
-                selectedSymbol={selectedSymbol}
-                symbols={symbols}
-                symbolMeta={symbolMeta}
-                dataSource={dataSource}
-                onSelectSymbol={setSelectedSymbol}
-                lotSize={lotSize}
-                onLotSizeChange={setLotSize}
-                onTrade={handleTrade}
-                tradeLoading={tradeLoading}
-                positions={positions}
-                onClosePosition={handleClosePosition}
-              />
-            </div>
-
             {/* Desktop View - Only visible on desktop */}
             <div className="hidden lg:flex flex-1 flex-col lg:flex-row overflow-hidden">
               {/* Chart Panel (Center-Left) */}
@@ -346,27 +329,54 @@ export default function TradingPlatform() {
     }
   }
 
-  return (
-    <div className="h-screen overflow-hidden">
-      <TradeMarketsLayout
-        account={account}
-        userId={user?.userId}
-        onLogout={logout}
-        onLogin={() => setShowAuth(true)}
-        activePage={activePage}
-        onPageChange={setActivePage}
-      >
-        {renderPage()}
+  const authModals = (
+    <>
+      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+    </>
+  )
 
-        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
-      </TradeMarketsLayout>
-    </div>
+  const mobileChartProps = {
+    account,
+    userName: user?.email?.split('@')[0],
+    onLogout: logout,
+    onLogin: () => setShowAuth(true),
+    isAuthenticated: !!accessToken,
+    selectedSymbol,
+    symbols,
+    symbolMeta,
+    dataSource,
+    onSelectSymbol: setSelectedSymbol,
+    lotSize,
+    onLotSizeChange: setLotSize,
+    onTrade: handleTrade,
+    tradeLoading,
+    positions,
+    onClosePosition: handleClosePosition,
+  }
+
+  return (
+    <>
+      <div className="hidden lg:block h-screen overflow-hidden">
+        <TradeMarketsLayout
+          account={account}
+          userId={user?.userId}
+          onLogout={logout}
+          onLogin={() => setShowAuth(true)}
+          activePage={activePage}
+          onPageChange={setActivePage}
+        >
+          {renderPage()}
+          {authModals}
+        </TradeMarketsLayout>
+      </div>
+
+      <div className="lg:hidden">
+        <MobileBankingExperience {...mobileChartProps} />
+        {authModals}
+      </div>
+    </>
   )
 }

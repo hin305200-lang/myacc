@@ -19,6 +19,9 @@ interface MobileTradingViewProps {
   tradeLoading: boolean
   positions: any[]
   onClosePosition: (id: string) => void
+  layout?: 'terminal' | 'banking'
+  initialView?: 'chart' | 'market' | 'order'
+  showNav?: boolean
 }
 
 type MobileView = 'chart' | 'market' | 'order'
@@ -35,8 +38,12 @@ export default function MobileTradingView({
   tradeLoading,
   positions,
   onClosePosition,
+  layout = 'terminal',
+  initialView = 'chart',
+  showNav = true,
 }: MobileTradingViewProps) {
-  const [activeView, setActiveView] = useState<MobileView>('chart')
+  const [activeView, setActiveView] = useState<MobileView>(initialView)
+  const isBanking = layout === 'banking'
 
   const selectedMeta = selectedSymbol ? {
     ...selectedSymbol,
@@ -51,25 +58,37 @@ export default function MobileTradingView({
     icon: '€',
   }
 
+  const shellClass = isBanking
+    ? 'h-full flex flex-col min-h-[420px]'
+    : 'lg:hidden h-full flex flex-col bg-[#0a0e27]'
+
   return (
-    <div className="lg:hidden h-full flex flex-col bg-[#0a0e27]">
+    <div className={shellClass}>
       {/* Active View Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className={`flex-1 overflow-hidden ${isBanking ? 'rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80' : ''}`}>
         {activeView === 'chart' && (
-          <div className="h-full flex flex-col bg-[#1a1d2e]">
+          <div className={`h-full flex flex-col ${isBanking ? 'bg-white' : 'bg-[#1a1d2e]'}`}>
             {/* Chart Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2d3142] bg-gradient-to-r from-[#252836] to-[#1a1d2e]">
+            <div
+              className={`flex items-center justify-between px-4 py-3 border-b ${
+                isBanking
+                  ? 'border-slate-100 bg-slate-50'
+                  : 'border-[#2d3142] bg-gradient-to-r from-[#252836] to-[#1a1d2e]'
+              }`}
+            >
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold text-white">{selectedSymbol?.symbol || 'EURUSD'}</span>
+                  <span className={`text-lg font-bold ${isBanking ? 'text-slate-900' : 'text-white'}`}>
+                    {selectedSymbol?.symbol || 'EURUSD'}
+                  </span>
                   <span className={`text-xs font-mono px-2 py-0.5 rounded ${selectedSymbol?.changePercent >= 0 ? 'bg-[#22c55e]/20 text-[#22c55e]' : 'bg-[#ef4444]/20 text-[#ef4444]'}`}>
                     {selectedSymbol?.changePercent >= 0 ? '+' : ''}{selectedSymbol?.changePercent?.toFixed(2)}%
                   </span>
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-[#94a3b8] mb-0.5">Price</div>
-                <div className="text-sm font-mono font-bold text-white">
+                <div className={`text-xs mb-0.5 ${isBanking ? 'text-slate-500' : 'text-[#94a3b8]'}`}>Price</div>
+                <div className={`text-sm font-mono font-bold ${isBanking ? 'text-slate-900' : 'text-white'}`}>
                   {selectedSymbol?.bid?.toFixed(5) || '1.00000'}
                 </div>
               </div>
@@ -81,14 +100,14 @@ export default function MobileTradingView({
             </div>
 
             {/* Bottom Panel */}
-            <div className="h-[140px] border-t border-[#1e293b]">
+            <div className={`h-[140px] border-t ${isBanking ? 'border-slate-100' : 'border-[#1e293b]'}`}>
               <BottomPanel positions={positions} onClosePosition={onClosePosition} />
             </div>
           </div>
         )}
 
         {activeView === 'market' && (
-          <div className="h-full bg-[#1a1d2e]">
+          <div className={`h-full ${isBanking ? 'bg-white' : 'bg-[#1a1d2e]'}`}>
             <MarketWatch
               symbols={symbols}
               selectedSymbol={selectedSymbol}
@@ -102,7 +121,11 @@ export default function MobileTradingView({
         )}
 
         {activeView === 'order' && (
-          <div className="h-full bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219]">
+          <div
+            className={`h-full ${
+              isBanking ? 'bg-white' : 'bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219]'
+            }`}
+          >
             <OrderPanel
               symbol={selectedSymbol}
               lotSize={lotSize}
@@ -114,7 +137,8 @@ export default function MobileTradingView({
         )}
       </div>
 
-      {/* Mobile Navigation Bar - Advanced Design */}
+      {/* Mobile Navigation Bar - terminal layout only */}
+      {showNav && !isBanking && (
       <div className="h-20 bg-gradient-to-t from-[#111538] via-[#0d1230] to-[#111538] border-t border-[#1e293b] flex items-center justify-around px-2 shadow-2xl relative z-50">
         {/* Background Glow Effect */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#6366f1]/5 to-transparent pointer-events-none" />
@@ -194,6 +218,7 @@ export default function MobileTradingView({
           }`}>Trade</span>
         </button>
       </div>
+      )}
     </div>
   )
 }

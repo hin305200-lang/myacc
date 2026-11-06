@@ -10,8 +10,11 @@ import {
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/auth-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getPageTheme, type PageAppearance } from '@/lib/page-theme'
 
-export default function WalletPage() {
+export default function WalletPage({ appearance = 'terminal' }: { appearance?: PageAppearance }) {
+  const t = getPageTheme(appearance)
+  const isBank = appearance === 'banking'
   const account = useAccountSummary()
   const { data: dashboard } = useAccountDashboard()
   const { data: transactions = [] } = useTransactions()
@@ -129,35 +132,37 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0a0e27] p-3 sm:p-4 lg:p-6">
-      <div className="max-w-5xl mx-auto">
+    <div className={t.page}>
+      <div className={isBank ? 'space-y-4' : 'max-w-5xl mx-auto'}>
+        {!isBank && (
         <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#94a3b8] mb-2 flex items-center gap-2 sm:gap-3">
+          <h1 className={`text-2xl sm:text-3xl font-bold ${t.title} mb-2 flex items-center gap-2 sm:gap-3`}>
             <Wallet className="h-6 w-6 sm:h-8 sm:w-8" />
             Wallet
           </h1>
-          <p className="text-sm sm:text-base text-slate-300">
+          <p className={`text-sm sm:text-base ${t.subtitle}`}>
             Balances from your ledger. Deposits and withdrawals require backend verification.
           </p>
         </div>
+        )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-4">
-            <div className="text-xs text-[#94a3b8] mb-1">Available (free margin)</div>
-            <div className="text-xl font-bold text-white font-mono">${freeMargin.toFixed(2)}</div>
+        <div className={`grid grid-cols-2 ${isBank ? 'gap-2' : 'lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6'}`}>
+          <div className={t.cardMuted}>
+            <div className={`text-xs ${t.label} mb-1`}>Available (free margin)</div>
+            <div className={`text-xl font-bold font-mono ${t.heading}`}>${freeMargin.toFixed(2)}</div>
           </div>
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-4">
-            <div className="text-xs text-[#94a3b8] mb-1">Balance</div>
-            <div className="text-xl font-bold text-white font-mono">${balance.toFixed(2)}</div>
+          <div className={t.cardMuted}>
+            <div className={`text-xs ${t.label} mb-1`}>Balance</div>
+            <div className={`text-xl font-bold font-mono ${t.heading}`}>${balance.toFixed(2)}</div>
           </div>
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-4">
-            <div className="text-xs text-[#94a3b8] mb-1">In positions (margin)</div>
-            <div className="text-xl font-bold text-white font-mono">
+          <div className={t.cardMuted}>
+            <div className={`text-xs ${t.label} mb-1`}>In positions (margin)</div>
+            <div className={`text-xl font-bold font-mono ${t.heading}`}>
               ${(dashboard?.invested ?? margin).toFixed(2)}
             </div>
           </div>
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-4">
-            <div className="text-xs text-[#94a3b8] mb-1">Unrealized P/L</div>
+          <div className={t.cardMuted}>
+            <div className={`text-xs ${t.label} mb-1`}>Unrealized P/L</div>
             <div
               className={`text-xl font-bold font-mono ${
                 (dashboard?.unrealizedPnl ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
@@ -168,30 +173,32 @@ export default function WalletPage() {
           </div>
         </div>
 
+        {!isBank && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6 text-sm">
-          <div className="bg-[#161b3d]/60 border border-[#1e293b] rounded-lg p-3">
-            <span className="text-[#94a3b8]">Equity </span>
-            <span className="font-mono text-white">${equity.toFixed(2)}</span>
+          <div className={t.cardMuted}>
+            <span className={t.label}>Equity </span>
+            <span className={`font-mono ${t.heading}`}>${equity.toFixed(2)}</span>
           </div>
-          <div className="bg-[#161b3d]/60 border border-[#1e293b] rounded-lg p-3">
-            <span className="text-[#94a3b8]">Daily realized P/L </span>
-            <span className="font-mono text-white">${(dashboard?.dailyRealizedPnl ?? 0).toFixed(2)}</span>
+          <div className={t.cardMuted}>
+            <span className={t.label}>Daily realized P/L </span>
+            <span className={`font-mono ${t.heading}`}>${(dashboard?.dailyRealizedPnl ?? 0).toFixed(2)}</span>
           </div>
-          <div className="bg-[#161b3d]/60 border border-[#1e293b] rounded-lg p-3">
-            <span className="text-[#94a3b8]">Margin level </span>
-            <span className="font-mono text-white">
+          <div className={t.cardMuted}>
+            <span className={t.label}>Margin level </span>
+            <span className={`font-mono ${t.heading}`}>
               {marginLevel > 0 ? `${marginLevel.toFixed(1)}%` : '—'}
             </span>
           </div>
         </div>
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+        <div className={`grid grid-cols-1 ${isBank ? 'gap-3' : 'lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6'}`}>
+          <div className={t.card}>
+            <h2 className={`text-lg font-semibold ${t.heading} mb-4 flex items-center gap-2`}>
               <ArrowDownCircle className="h-5 w-5 text-emerald-400" />
               Deposit request
             </h2>
-            <p className="text-xs text-slate-400 mb-3">
+            <p className={`text-xs mb-3 ${t.label}`}>
               No payment gateway connected — admin approves after manual payment verification.
             </p>
             <div className="space-y-4">
@@ -201,20 +208,20 @@ export default function WalletPage() {
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="Amount (USD)"
-                className="w-full px-4 py-2 border border-[#1e293b] rounded-lg bg-[#0d1230] text-white focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+                className={t.input}
               />
               <button
                 onClick={handleDeposit}
                 disabled={loading}
-                className="w-full py-2 bg-[#6366f1] text-white rounded-lg hover:bg-[#4f46e5] transition disabled:opacity-50"
+                className={t.btn}
               >
                 Submit deposit request
               </button>
             </div>
           </div>
 
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <div className={t.card}>
+            <h2 className={`text-lg font-semibold ${t.heading} mb-4 flex items-center gap-2`}>
               <ArrowUpCircle className="h-5 w-5 text-amber-400" />
               Withdrawal request
             </h2>
@@ -225,18 +232,18 @@ export default function WalletPage() {
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 placeholder="Amount (max: free margin)"
-                className="w-full px-4 py-2 border border-[#1e293b] rounded-lg bg-[#0d1230] text-white focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+                className={t.input}
               />
               <input
                 value={payoutDetails}
                 onChange={(e) => setPayoutDetails(e.target.value)}
                 placeholder="Payout details (IBAN, wallet address, etc.)"
-                className="w-full px-4 py-2 border border-[#1e293b] rounded-lg bg-[#0d1230] text-white focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+                className={t.input}
               />
               <button
                 onClick={handleWithdraw}
                 disabled={loading}
-                className="w-full py-2 bg-[#6366f1] text-white rounded-lg hover:bg-[#4f46e5] transition disabled:opacity-50"
+                className={t.btn}
               >
                 Submit withdrawal request
               </button>
@@ -256,41 +263,41 @@ export default function WalletPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-white mb-3">Recent deposits</h3>
+        <div className={`grid grid-cols-1 ${isBank ? 'gap-3' : 'lg:grid-cols-2 gap-4 mb-6'}`}>
+          <div className={t.card}>
+            <h3 className={`text-sm font-semibold ${t.heading} mb-3`}>Recent deposits</h3>
             <ul className="space-y-2 text-xs max-h-40 overflow-y-auto">
               {deposits.length === 0 && <li className="text-slate-500">No deposit requests yet</li>}
               {deposits.map((d) => (
                 <li key={d.id} className="flex justify-between border-b border-[#1e293b]/50 pb-1">
                   <span className={statusColor(d.status)}>{d.status}</span>
-                  <span className="font-mono text-white">${Number(d.amount).toFixed(2)}</span>
+                  <span className={`font-mono ${t.heading}`}>${Number(d.amount).toFixed(2)}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-white mb-3">Recent withdrawals</h3>
+          <div className={t.card}>
+            <h3 className={`text-sm font-semibold ${t.heading} mb-3`}>Recent withdrawals</h3>
             <ul className="space-y-2 text-xs max-h-40 overflow-y-auto">
               {withdrawals.length === 0 && <li className="text-slate-500">No withdrawal requests yet</li>}
               {withdrawals.map((w) => (
                 <li key={w.id} className="flex justify-between border-b border-[#1e293b]/50 pb-1">
                   <span className={statusColor(w.status)}>{w.status}</span>
-                  <span className="font-mono text-white">${Number(w.amount).toFixed(2)}</span>
+                  <span className={`font-mono ${t.heading}`}>${Number(w.amount).toFixed(2)}</span>
                 </li>
               ))}
             </ul>
           </div>
         </div>
 
-        <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <History className="h-5 w-5 text-[#94a3b8]" />
+        <div className={t.card}>
+          <h2 className={`text-lg font-semibold ${t.heading} mb-4 flex items-center gap-2`}>
+            <History className={`h-5 w-5 ${t.label}`} />
             Ledger transactions
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="text-[#94a3b8] uppercase">
+              <thead className={`${t.label} uppercase`}>
                 <tr>
                   <th className="text-left py-2">Date</th>
                   <th className="text-left py-2">Type</th>
@@ -309,7 +316,7 @@ export default function WalletPage() {
                   transactions.map((tx) => (
                     <tr key={tx.id} className="border-t border-[#1e293b]/50">
                       <td className="py-2 text-slate-400">{new Date(tx.createdAt).toLocaleString()}</td>
-                      <td className="py-2 text-white">{tx.type}</td>
+                      <td className={`py-2 ${t.body}`}>{tx.type}</td>
                       <td
                         className={`py-2 text-right font-mono ${
                           tx.amount >= 0 ? 'text-emerald-400' : 'text-red-400'
@@ -318,7 +325,7 @@ export default function WalletPage() {
                         {tx.amount >= 0 ? '+' : ''}
                         {Number(tx.amount).toFixed(2)}
                       </td>
-                      <td className="py-2 text-right font-mono text-white">
+                      <td className={`py-2 text-right font-mono ${t.heading}`}>
                         ${Number(tx.balanceAfter).toFixed(2)}
                       </td>
                     </tr>
