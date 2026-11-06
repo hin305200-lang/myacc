@@ -339,7 +339,14 @@ export default function TradingPlatform() {
   )
 
   const mobileChartProps = {
-    account,
+    account: {
+      balance: account.balance,
+      equity: account.equity,
+      freeMargin: account.freeMargin,
+      margin: account.margin,
+      marginLevel: account.marginLevel,
+      profit: account.profit,
+    },
     userName: user?.email?.split('@')[0],
     onLogout: logout,
     onLogin: () => setShowAuth(true),

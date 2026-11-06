@@ -1,15 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
+  Activity,
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  Briefcase,
   ChevronRight,
-  Home,
   LineChart,
   LogOut,
+  Radio,
+  TrendingDown,
   TrendingUp,
   User,
   Wallet as WalletIcon,
@@ -23,12 +26,23 @@ import DocumentsPage from './DocumentsPage'
 import ChatPage from './ChatPage'
 import { useTransactions } from '@/hooks/useMarketData'
 
-export type MobileBankTab = 'home' | 'markets' | 'trade' | 'wallet' | 'profile' | 'settings' | 'notifications' | 'documents' | 'chat'
+export type MobileBankTab =
+  | 'home'
+  | 'markets'
+  | 'trade'
+  | 'wallet'
+  | 'profile'
+  | 'settings'
+  | 'notifications'
+  | 'documents'
+  | 'chat'
 
 interface AccountSummary {
   balance: number
   equity: number
   freeMargin: number
+  margin: number
+  marginLevel: number
   profit: number
 }
 
@@ -57,56 +71,79 @@ const formatMoney = (value: number) =>
 export default function MobileBankingExperience(props: MobileBankingExperienceProps) {
   const [tab, setTab] = useState<MobileBankTab>('home')
   const { data: transactions = [] } = useTransactions()
-
   const go = (next: MobileBankTab) => setTab(next)
+  const displayName = props.userName ?? 'Trader'
 
-  const firstName = props.userName?.split(' ')[0] ?? 'Guest'
+  const movers = useMemo(() => {
+    return [...props.symbols]
+      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+      .slice(0, 6)
+  }, [props.symbols])
 
   return (
-    <div className="mobile-banking-app flex h-[100dvh] flex-col bg-[#eef1f6] text-slate-900">
-      <header className="bank-mobile-header shrink-0 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="flex items-center justify-between">
+    <div className="mobile-trading-app flex h-[100dvh] flex-col bg-[#070b1a] text-white">
+      <header className="shrink-0 border-b border-[#1e293b] bg-[#0a0e27]/95 px-4 pb-3 pt-[max(0.65rem,env(safe-area-inset-top))] backdrop-blur-md">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-medium text-slate-500">Good day</p>
-            <h1 className="text-lg font-semibold tracking-tight text-slate-900">{firstName}</h1>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#6366f1] to-[#3b82f6] text-xs font-black">
+                TM
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">Trading account</p>
+                <h1 className="text-sm font-semibold text-white">{displayName}</h1>
+              </div>
+            </div>
+            <Link href="/landing" className="mt-1 inline-block text-[10px] text-[#6366f1]">
+              Barratt Cooke Limited
+            </Link>
           </div>
           <div className="flex items-center gap-2">
+            <LiveBadge live={props.dataSource === 'live'} />
             <button
               type="button"
               onClick={() => go('notifications')}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200/80"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#111538] ring-1 ring-[#1e293b]"
               aria-label="Notifications"
             >
-              <Bell className="h-5 w-5 text-slate-600" />
-            </button>
-            <button
-              type="button"
-              onClick={() => go('profile')}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1e3a5f] text-sm font-semibold text-white shadow-sm"
-            >
-              {firstName.charAt(0).toUpperCase()}
+              <Bell className="h-4 w-4 text-[#94a3b8]" />
             </button>
           </div>
         </div>
-        <Link href="/landing" className="mt-2 inline-block text-[11px] font-medium text-[#2563eb]">
-          Barratt Cooke · TradeMarkets
-        </Link>
+
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <MetricChip label="Equity" value={formatMoney(props.account.equity)} highlight />
+          <MetricChip label="Balance" value={formatMoney(props.account.balance)} />
+          <MetricChip label="Free margin" value={formatMoney(props.account.freeMargin)} />
+          <MetricChip label="Margin" value={formatMoney(props.account.margin)} />
+          <MetricChip
+            label="P/L"
+            value={`${props.account.profit >= 0 ? '+' : ''}${formatMoney(props.account.profit)}`}
+            tone={props.account.profit >= 0 ? 'up' : 'down'}
+          />
+        </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-24">
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4">
         {tab === 'home' && (
-          <HomeTab
+          <AccountHomeTab
             account={props.account}
             transactions={transactions}
             positions={props.positions}
+            movers={movers}
+            symbolMeta={props.symbolMeta}
             onNavigate={go}
+            onSelectSymbol={(s) => {
+              props.onSelectSymbol(s)
+              go('trade')
+            }}
             isAuthenticated={props.isAuthenticated}
             onLogin={props.onLogin}
           />
         )}
         {tab === 'markets' && (
           <MobileTradingView
-            layout="banking"
+            layout="account"
             initialView="market"
             selectedSymbol={props.selectedSymbol}
             symbols={props.symbols}
@@ -119,11 +156,12 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
             tradeLoading={props.tradeLoading}
             positions={props.positions}
             onClosePosition={props.onClosePosition}
+            showNav={false}
           />
         )}
         {tab === 'trade' && (
           <MobileTradingView
-            layout="banking"
+            layout="account"
             initialView="chart"
             selectedSymbol={props.selectedSymbol}
             symbols={props.symbols}
@@ -136,11 +174,16 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
             tradeLoading={props.tradeLoading}
             positions={props.positions}
             onClosePosition={props.onClosePosition}
+            showNav={false}
           />
         )}
-        {tab === 'wallet' && <WalletPage appearance="banking" />}
+        {tab === 'wallet' && (
+          <div className="mobile-trading-subpage -mx-1 overflow-hidden rounded-2xl border border-[#1e293b] bg-[#0a0e27]">
+            <WalletPage appearance="terminal" />
+          </div>
+        )}
         {tab === 'profile' && (
-          <ProfileBankMenu
+          <ProfileTradingMenu
             onNavigate={go}
             onLogout={props.onLogout}
             isAuthenticated={props.isAuthenticated}
@@ -148,36 +191,78 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
           />
         )}
         {tab === 'settings' && (
-          <BankingSubpage title="Settings">
+          <TradingSubpage title="Settings">
             <SettingsPage />
-          </BankingSubpage>
+          </TradingSubpage>
         )}
         {tab === 'notifications' && (
-          <BankingSubpage title="Notifications">
+          <TradingSubpage title="Notifications">
             <NotificationsPage />
-          </BankingSubpage>
+          </TradingSubpage>
         )}
         {tab === 'documents' && (
-          <BankingSubpage title="Documents">
+          <TradingSubpage title="Documents">
             <DocumentsPage />
-          </BankingSubpage>
+          </TradingSubpage>
         )}
         {tab === 'chat' && (
-          <BankingSubpage title="Support">
+          <TradingSubpage title="Support">
             <ChatPage />
-          </BankingSubpage>
+          </TradingSubpage>
         )}
       </main>
 
-      <nav className="bank-mobile-tabbar fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200/90 bg-white/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1e293b] bg-[#0a0e27]/95 px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
         <div className="mx-auto flex max-w-lg items-end justify-between">
-          <TabButton active={tab === 'home'} label="Home" icon={Home} onClick={() => go('home')} />
+          <TabButton active={tab === 'home'} label="Account" icon={Briefcase} onClick={() => go('home')} />
           <TabButton active={tab === 'markets'} label="Markets" icon={TrendingUp} onClick={() => go('markets')} />
           <TabButton active={tab === 'trade'} label="Trade" icon={LineChart} onClick={() => go('trade')} />
-          <TabButton active={tab === 'wallet'} label="Wallet" icon={WalletIcon} onClick={() => go('wallet')} />
+          <TabButton active={tab === 'wallet'} label="Funds" icon={WalletIcon} onClick={() => go('wallet')} />
           <TabButton active={tab === 'profile'} label="Profile" icon={User} onClick={() => go('profile')} />
         </div>
       </nav>
+    </div>
+  )
+}
+
+function LiveBadge({ live }: { live: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+        live ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' : 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/25'
+      }`}
+    >
+      <Radio className={`h-3 w-3 ${live ? 'animate-pulse' : ''}`} />
+      {live ? 'Live' : 'Sim'}
+    </span>
+  )
+}
+
+function MetricChip({
+  label,
+  value,
+  highlight,
+  tone,
+}: {
+  label: string
+  value: string
+  highlight?: boolean
+  tone?: 'up' | 'down'
+}) {
+  return (
+    <div
+      className={`shrink-0 rounded-xl px-3 py-2 ring-1 ${
+        highlight ? 'bg-[#6366f1]/15 ring-[#6366f1]/40' : 'bg-[#111538] ring-[#1e293b]'
+      }`}
+    >
+      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#64748b]">{label}</p>
+      <p
+        className={`font-mono text-xs font-bold ${
+          tone === 'up' ? 'text-emerald-400' : tone === 'down' ? 'text-red-400' : 'text-white'
+        }`}
+      >
+        {value}
+      </p>
     </div>
   )
 }
@@ -197,117 +282,183 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-w-[4rem] flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 transition ${
-        active ? 'text-[#2563eb]' : 'text-slate-400'
+      className={`flex min-w-[3.5rem] flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 transition ${
+        active ? 'text-[#22d3ee]' : 'text-[#64748b]'
       }`}
     >
-      <Icon className={`h-6 w-6 ${active ? 'stroke-[2.5]' : 'stroke-2'}`} />
-      <span className="text-[10px] font-semibold">{label}</span>
+      <Icon className={`h-5 w-5 ${active ? 'stroke-[2.5]' : 'stroke-2'}`} />
+      <span className="text-[9px] font-bold uppercase tracking-wide">{label}</span>
+      {active && <span className="h-0.5 w-5 rounded-full bg-[#22d3ee]" />}
     </button>
   )
 }
 
-function HomeTab({
+function AccountHomeTab({
   account,
   transactions,
   positions,
+  movers,
+  symbolMeta,
   onNavigate,
+  onSelectSymbol,
   isAuthenticated,
   onLogin,
 }: {
   account: AccountSummary
   transactions: { id: string; type: string; amount: number; createdAt: string }[]
   positions: any[]
+  movers: any[]
+  symbolMeta: Record<string, { icon: string }>
   onNavigate: (tab: MobileBankTab) => void
+  onSelectSymbol: (symbol: any) => void
   isAuthenticated: boolean
   onLogin?: () => void
 }) {
+  const marginLevelDisplay =
+    account.marginLevel > 0 ? `${account.marginLevel.toFixed(1)}%` : '—'
+
   return (
     <div className="space-y-4 pb-4">
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f2744] via-[#1e3a5f] to-[#2563eb] p-5 text-white shadow-lg shadow-[#1e3a5f]/25">
-        <p className="text-sm font-medium text-blue-100/90">Total balance</p>
-        <p className="mt-1 font-mono text-3xl font-bold tracking-tight">{formatMoney(account.balance)}</p>
-        <div className="mt-4 flex gap-6 text-sm">
-          <div>
-            <p className="text-blue-100/80">Equity</p>
-            <p className="font-semibold">{formatMoney(account.equity)}</p>
+      <section className="relative overflow-hidden rounded-2xl border border-[#6366f1]/30 bg-gradient-to-br from-[#111538] via-[#0d1230] to-[#070b1a] p-5 shadow-[0_0_40px_rgba(99,102,241,0.12)]">
+        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[#6366f1]/20 blur-2xl" />
+        <p className="text-xs font-medium uppercase tracking-widest text-[#94a3b8]">Account equity</p>
+        <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-white">{formatMoney(account.equity)}</p>
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
+            <p className="text-[9px] uppercase text-[#64748b]">Margin lvl</p>
+            <p className="font-mono text-sm font-semibold text-[#22d3ee]">{marginLevelDisplay}</p>
           </div>
-          <div>
-            <p className="text-blue-100/80">Available</p>
-            <p className="font-semibold">{formatMoney(account.freeMargin)}</p>
-          </div>
-          <div>
-            <p className="text-blue-100/80">P/L</p>
-            <p className={`font-semibold ${account.profit >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+          <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
+            <p className="text-[9px] uppercase text-[#64748b]">Open P/L</p>
+            <p className={`font-mono text-sm font-semibold ${account.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               {account.profit >= 0 ? '+' : ''}
               {formatMoney(account.profit)}
             </p>
+          </div>
+          <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
+            <p className="text-[9px] uppercase text-[#64748b]">Positions</p>
+            <p className="font-mono text-sm font-semibold text-white">{positions.length}</p>
           </div>
         </div>
       </section>
 
       <section className="grid grid-cols-4 gap-2">
-        <QuickAction icon={ArrowDownLeft} label="Deposit" onClick={() => onNavigate('wallet')} />
-        <QuickAction icon={ArrowUpRight} label="Withdraw" onClick={() => onNavigate('wallet')} />
-        <QuickAction icon={LineChart} label="Trade" onClick={() => onNavigate('trade')} />
-        <QuickAction icon={TrendingUp} label="Markets" onClick={() => onNavigate('markets')} />
+        <QuickAction icon={LineChart} label="Trade" onClick={() => onNavigate('trade')} accent="purple" />
+        <QuickAction icon={TrendingUp} label="Markets" onClick={() => onNavigate('markets')} accent="cyan" />
+        <QuickAction icon={ArrowDownLeft} label="Deposit" onClick={() => onNavigate('wallet')} accent="green" />
+        <QuickAction icon={ArrowUpRight} label="Withdraw" onClick={() => onNavigate('wallet')} accent="amber" />
       </section>
 
       {!isAuthenticated && onLogin && (
         <button
           type="button"
           onClick={onLogin}
-          className="w-full rounded-2xl bg-[#2563eb] py-3 text-sm font-semibold text-white shadow-sm"
+          className="w-full rounded-xl bg-gradient-to-r from-[#6366f1] to-[#3b82f6] py-3 text-sm font-bold text-white shadow-lg shadow-indigo-900/40"
         >
-          Sign in to your account
+          Sign in to trade live
         </button>
       )}
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
+      <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Open positions</h2>
-          <button type="button" onClick={() => onNavigate('trade')} className="text-xs font-semibold text-[#2563eb]">
-            View
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <Activity className="h-4 w-4 text-[#22d3ee]" />
+            Market movers
+          </h2>
+          <button type="button" onClick={() => onNavigate('markets')} className="text-xs font-semibold text-[#6366f1]">
+            Watchlist
+          </button>
+        </div>
+        <ul className="space-y-2">
+          {movers.map((s) => {
+            const up = s.changePercent >= 0
+            return (
+              <li key={s.symbol}>
+                <button
+                  type="button"
+                  onClick={() => onSelectSymbol(s)}
+                  className="flex w-full items-center justify-between rounded-xl bg-[#0d1230] px-3 py-2.5 ring-1 ring-[#1e293b] active:bg-[#161b3d]"
+                >
+                  <div className="flex items-center gap-2 text-left">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#161b3d] text-xs font-bold">
+                      {symbolMeta[s.symbol]?.icon ?? s.symbol.slice(0, 2)}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-white">{s.symbol}</p>
+                      <p className="font-mono text-[11px] text-[#94a3b8]">{s.bid?.toFixed(5)}</p>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-0.5 rounded-lg px-2 py-1 font-mono text-xs font-bold ${
+                      up ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                    }`}
+                  >
+                    {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {up ? '+' : ''}
+                    {s.changePercent?.toFixed(2)}%
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Open positions</h2>
+          <button type="button" onClick={() => onNavigate('trade')} className="text-xs font-semibold text-[#6366f1]">
+            Terminal
           </button>
         </div>
         {positions.length === 0 ? (
-          <p className="text-sm text-slate-500">No open trades</p>
+          <p className="text-sm text-[#64748b]">No open trades — tap Trade to open a position.</p>
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {positions.slice(0, 4).map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
-                <span className="font-medium text-slate-800">
-                  {p.symbol}{' '}
-                  <span className="text-xs text-slate-500">{p.side}</span>
-                </span>
-                <span className={`font-mono font-semibold ${p.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {p.profit >= 0 ? '+' : ''}
-                  {formatMoney(p.profit)}
-                </span>
+          <ul className="space-y-2">
+            {positions.map((p) => (
+              <li
+                key={p.id}
+                className="rounded-xl bg-[#0d1230] px-3 py-3 ring-1 ring-[#1e293b]"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {p.symbol}{' '}
+                      <span className={`text-xs ${p.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>{p.side}</span>
+                    </p>
+                    <p className="mt-0.5 font-mono text-[10px] text-[#64748b]">
+                      {p.volume} lot · open {p.openPrice} → {p.currentPrice?.toFixed?.(5) ?? p.currentPrice}
+                    </p>
+                  </div>
+                  <p className={`font-mono text-sm font-bold ${p.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {p.profit >= 0 ? '+' : ''}
+                    {formatMoney(p.profit)}
+                  </p>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
+      <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Recent activity</h2>
-          <button type="button" onClick={() => onNavigate('wallet')} className="text-xs font-semibold text-[#2563eb]">
-            See all
+          <h2 className="text-sm font-semibold text-white">Account ledger</h2>
+          <button type="button" onClick={() => onNavigate('wallet')} className="text-xs font-semibold text-[#6366f1]">
+            Funds
           </button>
         </div>
         {transactions.length === 0 ? (
-          <p className="text-sm text-slate-500">No transactions yet</p>
+          <p className="text-sm text-[#64748b]">No ledger entries yet</p>
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {transactions.slice(0, 5).map((tx) => (
-              <li key={tx.id} className="flex items-center justify-between py-2.5">
+          <ul className="divide-y divide-[#1e293b]">
+            {transactions.slice(0, 6).map((tx) => (
+              <li key={tx.id} className="flex items-center justify-between py-2.5 first:pt-0">
                 <div>
-                  <p className="text-sm font-medium text-slate-800">{tx.type.replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                  <p className="text-sm font-medium text-white">{tx.type.replace(/_/g, ' ')}</p>
+                  <p className="text-[10px] text-[#64748b]">{new Date(tx.createdAt).toLocaleString()}</p>
                 </div>
-                <span className={`font-mono text-sm font-semibold ${tx.amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <span className={`font-mono text-sm font-semibold ${tx.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {tx.amount >= 0 ? '+' : ''}
                   {formatMoney(tx.amount)}
                 </span>
@@ -324,26 +475,36 @@ function QuickAction({
   icon: Icon,
   label,
   onClick,
+  accent,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   onClick: () => void
+  accent: 'purple' | 'cyan' | 'green' | 'amber'
 }) {
+  const ring =
+    accent === 'purple'
+      ? 'ring-[#6366f1]/40 text-[#a5b4fc]'
+      : accent === 'cyan'
+        ? 'ring-[#22d3ee]/40 text-[#22d3ee]'
+        : accent === 'green'
+          ? 'ring-emerald-500/40 text-emerald-400'
+          : 'ring-amber-500/40 text-amber-400'
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2 rounded-2xl bg-white py-3 shadow-sm ring-1 ring-slate-200/80 active:scale-[0.98]"
+      className="flex flex-col items-center gap-1.5 rounded-xl border border-[#1e293b] bg-[#111538] py-3 active:scale-[0.98]"
     >
-      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
+      <span className={`flex h-10 w-10 items-center justify-center rounded-full bg-[#0d1230] ring-1 ${ring}`}>
         <Icon className="h-5 w-5" />
       </span>
-      <span className="text-[11px] font-semibold text-slate-700">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</span>
     </button>
   )
 }
 
-function ProfileBankMenu({
+function ProfileTradingMenu({
   onNavigate,
   onLogout,
   isAuthenticated,
@@ -356,20 +517,20 @@ function ProfileBankMenu({
 }) {
   return (
     <div className="space-y-4 pb-4">
-      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
-        <ProfilePage appearance="banking" compact />
+      <div className="overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538]">
+        <ProfilePage appearance="terminal" compact />
       </div>
-      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
+      <div className="overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538]">
         <MenuRow label="Settings" onClick={() => onNavigate('settings')} />
         <MenuRow label="Notifications" onClick={() => onNavigate('notifications')} />
-        <MenuRow label="Documents" onClick={() => onNavigate('documents')} />
+        <MenuRow label="Documents & reports" onClick={() => onNavigate('documents')} />
         <MenuRow label="Support chat" onClick={() => onNavigate('chat')} />
       </div>
       {isAuthenticated ? (
         <button
           type="button"
           onClick={onLogout}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white py-3 text-sm font-semibold text-red-600 shadow-sm"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 py-3 text-sm font-semibold text-red-400"
         >
           <LogOut className="h-4 w-4" />
           Log out
@@ -379,7 +540,7 @@ function ProfileBankMenu({
           <button
             type="button"
             onClick={onLogin}
-            className="w-full rounded-2xl bg-[#2563eb] py-3 text-sm font-semibold text-white"
+            className="w-full rounded-xl bg-[#6366f1] py-3 text-sm font-bold text-white"
           >
             Sign in
           </button>
@@ -389,11 +550,11 @@ function ProfileBankMenu({
   )
 }
 
-function BankingSubpage({ title, children }: { title: string; children: React.ReactNode }) {
+function TradingSubpage({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="pb-4">
-      <h2 className="mb-3 px-1 text-base font-semibold text-slate-900">{title}</h2>
-      <div className="mobile-banking-subpage overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
+      <h2 className="mb-3 px-1 text-sm font-semibold uppercase tracking-wide text-[#94a3b8]">{title}</h2>
+      <div className="mobile-trading-subpage overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538]">
         {children}
       </div>
     </div>
@@ -405,10 +566,10 @@ function MenuRow({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3.5 text-left text-sm font-medium text-slate-800 last:border-0 active:bg-slate-50"
+      className="flex w-full items-center justify-between border-b border-[#1e293b] px-4 py-3.5 text-left text-sm font-medium text-white last:border-0 active:bg-[#0d1230]"
     >
       {label}
-      <ChevronRight className="h-4 w-4 text-slate-400" />
+      <ChevronRight className="h-4 w-4 text-[#64748b]" />
     </button>
   )
 }

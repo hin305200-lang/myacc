@@ -12,6 +12,7 @@ interface MarketWatchProps {
   selectedSymbol: MarketSymbol | null
   onSelectSymbol: (symbol: MarketSymbol) => void
   dataSource?: 'live' | 'simulated'
+  embedded?: boolean
 }
 
 const CATEGORIES = [
@@ -29,6 +30,7 @@ export default function MarketWatch({
   selectedSymbol,
   onSelectSymbol,
   dataSource = 'simulated',
+  embedded = false,
 }: MarketWatchProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]['id']>('all')
@@ -76,7 +78,11 @@ export default function MarketWatch({
   }
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-b from-[#1a1d2e] to-[#151824] border-l border-[#2d3142] min-w-0">
+    <div
+      className={`h-full flex flex-col bg-gradient-to-b from-[#1a1d2e] to-[#151824] min-w-0 ${
+        embedded ? 'rounded-2xl border border-[#2d3142] overflow-hidden' : 'border-l border-[#2d3142]'
+      }`}
+    >
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#2d3142] bg-[#252836]/90">
         <span className="text-xs font-bold text-white uppercase tracking-wider">Markets</span>
         <span

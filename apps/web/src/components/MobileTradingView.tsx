@@ -19,7 +19,7 @@ interface MobileTradingViewProps {
   tradeLoading: boolean
   positions: any[]
   onClosePosition: (id: string) => void
-  layout?: 'terminal' | 'banking'
+  layout?: 'terminal' | 'banking' | 'account'
   initialView?: 'chart' | 'market' | 'order'
   showNav?: boolean
 }
@@ -43,75 +43,124 @@ export default function MobileTradingView({
   showNav = true,
 }: MobileTradingViewProps) {
   const [activeView, setActiveView] = useState<MobileView>(initialView)
-  const isBanking = layout === 'banking'
+  const isAccount = layout === 'account' || layout === 'banking'
 
-  const selectedMeta = selectedSymbol ? {
-    ...selectedSymbol,
-    icon: symbolMeta[selectedSymbol.symbol]?.icon ?? '₿',
-    changePercent: selectedSymbol.changePercent,
-  } : {
-    symbol: 'EURUSD',
-    bid: 1.0850,
-    ask: 1.0852,
-    spread: 0.0002,
-    changePercent: 0.12,
-    icon: '€',
-  }
+  const selectedMeta = selectedSymbol
+    ? {
+        ...selectedSymbol,
+        icon: symbolMeta[selectedSymbol.symbol]?.icon ?? '₿',
+        changePercent: selectedSymbol.changePercent,
+      }
+    : {
+        symbol: 'EURUSD',
+        bid: 1.085,
+        ask: 1.0852,
+        spread: 0.0002,
+        changePercent: 0.12,
+        icon: '€',
+      }
 
-  const shellClass = isBanking
+  const shellClass = isAccount
     ? 'h-full flex flex-col min-h-[420px]'
     : 'lg:hidden h-full flex flex-col bg-[#0a0e27]'
 
+  const panelClass = isAccount
+    ? 'flex-1 overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538] shadow-[0_8px_32px_rgba(0,0,0,0.35)]'
+    : 'flex-1 overflow-hidden'
+
   return (
     <div className={shellClass}>
-      {/* Active View Content */}
-      <div className={`flex-1 overflow-hidden ${isBanking ? 'rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80' : ''}`}>
-        {activeView === 'chart' && (
-          <div className={`h-full flex flex-col ${isBanking ? 'bg-white' : 'bg-[#1a1d2e]'}`}>
-            {/* Chart Header */}
-            <div
-              className={`flex items-center justify-between px-4 py-3 border-b ${
-                isBanking
-                  ? 'border-slate-100 bg-slate-50'
-                  : 'border-[#2d3142] bg-gradient-to-r from-[#252836] to-[#1a1d2e]'
+      {isAccount && (
+        <div className="mb-3 flex rounded-xl bg-[#0d1230] p-1 ring-1 ring-[#1e293b]">
+          {(
+            [
+              { id: 'chart' as const, label: 'Chart', icon: BarChart3 },
+              { id: 'market' as const, label: 'Watchlist', icon: List },
+              { id: 'order' as const, label: 'Ticket', icon: Zap },
+            ] as const
+          ).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveView(id)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-semibold uppercase tracking-wide transition ${
+                activeView === id
+                  ? 'bg-gradient-to-b from-[#6366f1] to-[#4f46e5] text-white shadow-md'
+                  : 'text-[#94a3b8]'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className={`text-lg font-bold ${isBanking ? 'text-slate-900' : 'text-white'}`}>
-                    {selectedSymbol?.symbol || 'EURUSD'}
-                  </span>
-                  <span className={`text-xs font-mono px-2 py-0.5 rounded ${selectedSymbol?.changePercent >= 0 ? 'bg-[#22c55e]/20 text-[#22c55e]' : 'bg-[#ef4444]/20 text-[#ef4444]'}`}>
-                    {selectedSymbol?.changePercent >= 0 ? '+' : ''}{selectedSymbol?.changePercent?.toFixed(2)}%
-                  </span>
-                </div>
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className={panelClass}>
+        {activeView === 'chart' && (
+          <div className="flex h-full flex-col bg-[#1a1d2e]">
+            <div className="flex items-center justify-between border-b border-[#2d3142] bg-gradient-to-r from-[#252836] to-[#1a1d2e] px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-white">{selectedSymbol?.symbol || 'EURUSD'}</span>
+                <span
+                  className={`rounded px-2 py-0.5 font-mono text-xs ${
+                    selectedSymbol?.changePercent >= 0
+                      ? 'bg-[#22c55e]/20 text-[#22c55e]'
+                      : 'bg-[#ef4444]/20 text-[#ef4444]'
+                  }`}
+                >
+                  {selectedSymbol?.changePercent >= 0 ? '+' : ''}
+                  {selectedSymbol?.changePercent?.toFixed(2)}%
+                </span>
               </div>
               <div className="text-right">
-                <div className={`text-xs mb-0.5 ${isBanking ? 'text-slate-500' : 'text-[#94a3b8]'}`}>Price</div>
-                <div className={`text-sm font-mono font-bold ${isBanking ? 'text-slate-900' : 'text-white'}`}>
-                  {selectedSymbol?.bid?.toFixed(5) || '1.00000'}
+                <div className="mb-0.5 text-[10px] uppercase tracking-wider text-[#64748b]">Bid / Ask</div>
+                <div className="font-mono text-sm font-bold text-white">
+                  {selectedSymbol?.bid?.toFixed(5) || '—'}{' '}
+                  <span className="text-[#64748b]">/</span>{' '}
+                  {selectedSymbol?.ask?.toFixed(5) || '—'}
                 </div>
               </div>
             </div>
-            
-            {/* Chart */}
-            <div className="flex-1 overflow-hidden min-h-[400px]">
+
+            <div className="min-h-[280px] flex-1 overflow-hidden">
               <TradingViewChart symbol={selectedMeta} />
             </div>
 
-            {/* Bottom Panel */}
-            <div className={`h-[140px] border-t ${isBanking ? 'border-slate-100' : 'border-[#1e293b]'}`}>
+            {isAccount && (
+              <div className="grid grid-cols-2 gap-2 border-t border-[#1e293b] bg-[#0d1230] p-3">
+                <button
+                  type="button"
+                  disabled={tradeLoading}
+                  onClick={() => onTrade('SELL')}
+                  className="rounded-xl bg-gradient-to-b from-[#ef4444] to-[#dc2626] py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-red-900/30 disabled:opacity-50"
+                >
+                  Sell {lotSize} lot
+                </button>
+                <button
+                  type="button"
+                  disabled={tradeLoading}
+                  onClick={() => onTrade('BUY')}
+                  className="rounded-xl bg-gradient-to-b from-[#22c55e] to-[#16a34a] py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-green-900/30 disabled:opacity-50"
+                >
+                  Buy {lotSize} lot
+                </button>
+              </div>
+            )}
+
+            <div className={`border-t border-[#1e293b] ${isAccount ? 'h-[120px]' : 'h-[140px]'}`}>
               <BottomPanel positions={positions} onClosePosition={onClosePosition} />
             </div>
           </div>
         )}
 
         {activeView === 'market' && (
-          <div className={`h-full ${isBanking ? 'bg-white' : 'bg-[#1a1d2e]'}`}>
+          <div className="h-full min-h-[360px] bg-[#1a1d2e]">
             <MarketWatch
               symbols={symbols}
               selectedSymbol={selectedSymbol}
               dataSource={dataSource}
+              embedded={isAccount}
               onSelectSymbol={(symbol) => {
                 onSelectSymbol(symbol)
                 setActiveView('chart')
@@ -121,11 +170,7 @@ export default function MobileTradingView({
         )}
 
         {activeView === 'order' && (
-          <div
-            className={`h-full ${
-              isBanking ? 'bg-white' : 'bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219]'
-            }`}
-          >
+          <div className="h-full min-h-[360px] bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219]">
             <OrderPanel
               symbol={selectedSymbol}
               lotSize={lotSize}
@@ -137,88 +182,46 @@ export default function MobileTradingView({
         )}
       </div>
 
-      {/* Mobile Navigation Bar - terminal layout only */}
-      {showNav && !isBanking && (
-      <div className="h-20 bg-gradient-to-t from-[#111538] via-[#0d1230] to-[#111538] border-t border-[#1e293b] flex items-center justify-around px-2 shadow-2xl relative z-50">
-        {/* Background Glow Effect */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#6366f1]/5 to-transparent pointer-events-none" />
-        
-        <button
-          onClick={() => setActiveView('chart')}
-          className={`flex flex-col items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl transition-all relative overflow-hidden group ${
-            activeView === 'chart'
-              ? 'text-white bg-gradient-to-b from-[#6366f1]/30 to-[#6366f1]/10'
-              : 'text-[#94a3b8] hover:text-white'
-          }`}
-        >
-          {activeView === 'chart' && (
-            <>
-              <div className="absolute inset-0 bg-gradient-to-br from-[#6366f1]/20 via-[#6366f1]/10 to-transparent" />
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-12 h-0.5 bg-gradient-to-r from-transparent via-[#6366f1] to-transparent" />
-            </>
-          )}
-          <div className={`relative transition-all duration-300 ${activeView === 'chart' ? 'scale-110' : 'group-hover:scale-105'}`}>
+      {showNav && !isAccount && (
+        <div className="relative z-50 flex h-20 items-center justify-around border-t border-[#1e293b] bg-gradient-to-t from-[#111538] via-[#0d1230] to-[#111538] px-2 shadow-2xl">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#6366f1]/5 to-transparent" />
+          {/* terminal nav buttons — unchanged pattern */}
+          <NavBtn active={activeView === 'chart'} label="Chart" onClick={() => setActiveView('chart')}>
             <BarChart3 className="h-7 w-7" />
-            {activeView === 'chart' && (
-              <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-[#6366f1] rounded-full animate-pulse shadow-lg shadow-[#6366f1]/50" />
-            )}
-          </div>
-          <span className={`text-[10px] font-bold uppercase tracking-wider transition-all ${
-            activeView === 'chart' ? 'text-white' : 'text-[#94a3b8]'
-          }`}>Chart</span>
-        </button>
-
-        <button
-          onClick={() => setActiveView('market')}
-          className={`flex flex-col items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl transition-all relative overflow-hidden group ${
-            activeView === 'market'
-              ? 'text-white bg-gradient-to-b from-[#6366f1]/30 to-[#6366f1]/10'
-              : 'text-[#94a3b8] hover:text-white'
-          }`}
-        >
-          {activeView === 'market' && (
-            <>
-              <div className="absolute inset-0 bg-gradient-to-br from-[#6366f1]/20 via-[#6366f1]/10 to-transparent" />
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-12 h-0.5 bg-gradient-to-r from-transparent via-[#6366f1] to-transparent" />
-            </>
-          )}
-          <div className={`relative transition-all duration-300 ${activeView === 'market' ? 'scale-110' : 'group-hover:scale-105'}`}>
+          </NavBtn>
+          <NavBtn active={activeView === 'market'} label="Market" onClick={() => setActiveView('market')}>
             <List className="h-7 w-7" />
-            {activeView === 'market' && (
-              <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-[#6366f1] rounded-full animate-pulse shadow-lg shadow-[#6366f1]/50" />
-            )}
-          </div>
-          <span className={`text-[10px] font-bold uppercase tracking-wider transition-all ${
-            activeView === 'market' ? 'text-white' : 'text-[#94a3b8]'
-          }`}>Market</span>
-        </button>
-
-        <button
-          onClick={() => setActiveView('order')}
-          className={`flex flex-col items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl transition-all relative overflow-hidden group ${
-            activeView === 'order'
-              ? 'text-white bg-gradient-to-b from-[#6366f1]/30 to-[#6366f1]/10'
-              : 'text-[#94a3b8] hover:text-white'
-          }`}
-        >
-          {activeView === 'order' && (
-            <>
-              <div className="absolute inset-0 bg-gradient-to-br from-[#6366f1]/20 via-[#6366f1]/10 to-transparent" />
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-12 h-0.5 bg-gradient-to-r from-transparent via-[#6366f1] to-transparent" />
-            </>
-          )}
-          <div className={`relative transition-all duration-300 ${activeView === 'order' ? 'scale-110' : 'group-hover:scale-105'}`}>
+          </NavBtn>
+          <NavBtn active={activeView === 'order'} label="Trade" onClick={() => setActiveView('order')}>
             <Zap className="h-7 w-7" />
-            {activeView === 'order' && (
-              <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-[#6366f1] rounded-full animate-pulse shadow-lg shadow-[#6366f1]/50" />
-            )}
-          </div>
-          <span className={`text-[10px] font-bold uppercase tracking-wider transition-all ${
-            activeView === 'order' ? 'text-white' : 'text-[#94a3b8]'
-          }`}>Trade</span>
-        </button>
-      </div>
+          </NavBtn>
+        </div>
       )}
     </div>
+  )
+}
+
+function NavBtn({
+  active,
+  label,
+  onClick,
+  children,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative flex flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl px-5 py-2.5 transition-all ${
+        active ? 'bg-gradient-to-b from-[#6366f1]/30 to-[#6366f1]/10 text-white' : 'text-[#94a3b8]'
+      }`}
+    >
+      {children}
+      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+    </button>
   )
 }

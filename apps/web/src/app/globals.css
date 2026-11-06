@@ -155,43 +155,13 @@ input[type="number"] {
   }
 }
 
-/* Mobile banking shell — light “bank app” subpages (desktop unchanged) */
+/* Mobile trading account shell (desktop unchanged) */
 @media (max-width: 1023px) {
-  .mobile-banking-app .mobile-banking-subpage > div {
+  .mobile-trading-app .mobile-trading-subpage > div {
     background: transparent !important;
     max-height: none !important;
     overflow: visible !important;
     padding: 0.75rem !important;
-  }
-
-  .mobile-banking-app .mobile-banking-subpage h1 {
-    color: #0f172a !important;
-    font-size: 1.125rem !important;
-    margin-bottom: 0.5rem !important;
-  }
-
-  .mobile-banking-app .mobile-banking-subpage p {
-    color: #64748b !important;
-    font-size: 0.875rem !important;
-  }
-
-  .mobile-banking-app .mobile-banking-subpage .bg-\\[\\#161b3d\\] {
-    background-color: #f8fafc !important;
-    border-color: #e2e8f0 !important;
-  }
-
-  .mobile-banking-app .mobile-banking-subpage .text-white {
-    color: #0f172a !important;
-  }
-
-  .mobile-banking-app .mobile-banking-subpage .text-\\[\\#94a3b8\\] {
-    color: #64748b !important;
-  }
-
-  .mobile-banking-app .mobile-banking-subpage .bg-\\[\\#0d1230\\] {
-    background-color: #fff !important;
-    border-color: #e2e8f0 !important;
-    color: #0f172a !important;
   }
 }
 
