@@ -25,6 +25,12 @@ import NotificationsPage from './NotificationsPage'
 import DocumentsPage from './DocumentsPage'
 import ChatPage from './ChatPage'
 import { useTransactions } from '@/hooks/useMarketData'
+import {
+  formatMarginLevelIfAuth,
+  formatPlIfAuth,
+  formatUsdIfAuth,
+  maskAccountId,
+} from '@/lib/account-display'
 
 export type MobileBankTab =
   | 'home'
@@ -49,8 +55,10 @@ interface AccountSummary {
 interface MobileBankingExperienceProps {
   account: AccountSummary
   userName?: string
+  accountId?: string
   onLogout?: () => void
   onLogin?: () => void
+  onRegister?: () => void
   isAuthenticated: boolean
   selectedSymbol: any
   symbols: any[]
@@ -65,14 +73,14 @@ interface MobileBankingExperienceProps {
   onClosePosition: (id: string) => void
 }
 
-const formatMoney = (value: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
-
 export default function MobileBankingExperience(props: MobileBankingExperienceProps) {
   const [tab, setTab] = useState<MobileBankTab>('home')
   const { data: transactions = [] } = useTransactions()
   const go = (next: MobileBankTab) => setTab(next)
-  const displayName = props.userName ?? 'Trader'
+  const auth = props.isAuthenticated
+  const displayName = auth ? (props.userName ?? 'Client') : 'Guest'
+  const accountRef = maskAccountId(props.accountId)
+  const requireAuth = props.onLogin ?? (() => {})
 
   const movers = useMemo(() => {
     return [...props.symbols]
@@ -90,8 +98,13 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                 TM
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">Trading account</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">
+                  {auth ? 'Live trading account' : 'Market access only'}
+                </p>
                 <h1 className="text-sm font-semibold text-white">{displayName}</h1>
+                {auth && accountRef && (
+                  <p className="font-mono text-[10px] text-[#64748b]">Acct #{accountRef}</p>
+                )}
               </div>
             </div>
             <Link href="/landing" className="mt-1 inline-block text-[10px] text-[#6366f1]">
@@ -99,6 +112,15 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
             </Link>
           </div>
           <div className="flex items-center gap-2">
+            {!auth && (
+              <button
+                type="button"
+                onClick={requireAuth}
+                className="rounded-lg bg-[#6366f1] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white"
+              >
+                Sign in
+              </button>
+            )}
             <LiveBadge live={props.dataSource === 'live'} />
             <button
               type="button"
@@ -112,14 +134,14 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
         </div>
 
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <MetricChip label="Equity" value={formatMoney(props.account.equity)} highlight />
-          <MetricChip label="Balance" value={formatMoney(props.account.balance)} />
-          <MetricChip label="Free margin" value={formatMoney(props.account.freeMargin)} />
-          <MetricChip label="Margin" value={formatMoney(props.account.margin)} />
+          <MetricChip label="Equity" value={formatUsdIfAuth(props.account.equity, auth)} highlight />
+          <MetricChip label="Balance" value={formatUsdIfAuth(props.account.balance, auth)} />
+          <MetricChip label="Free margin" value={formatUsdIfAuth(props.account.freeMargin, auth)} />
+          <MetricChip label="Margin" value={formatUsdIfAuth(props.account.margin, auth)} />
           <MetricChip
             label="P/L"
-            value={`${props.account.profit >= 0 ? '+' : ''}${formatMoney(props.account.profit)}`}
-            tone={props.account.profit >= 0 ? 'up' : 'down'}
+            value={formatPlIfAuth(props.account.profit, auth)}
+            tone={auth ? (props.account.profit >= 0 ? 'up' : 'down') : undefined}
           />
         </div>
       </header>
@@ -139,12 +161,15 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
             }}
             isAuthenticated={props.isAuthenticated}
             onLogin={props.onLogin}
+            onRegister={props.onRegister}
           />
         )}
         {tab === 'markets' && (
           <MobileTradingView
             layout="account"
             initialView="market"
+            isAuthenticated={auth}
+            onRequireAuth={requireAuth}
             selectedSymbol={props.selectedSymbol}
             symbols={props.symbols}
             symbolMeta={props.symbolMeta}
@@ -163,6 +188,8 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
           <MobileTradingView
             layout="account"
             initialView="chart"
+            isAuthenticated={auth}
+            onRequireAuth={requireAuth}
             selectedSymbol={props.selectedSymbol}
             symbols={props.symbols}
             symbolMeta={props.symbolMeta}
@@ -177,11 +204,14 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
             showNav={false}
           />
         )}
-        {tab === 'wallet' && (
-          <div className="mobile-trading-subpage -mx-1 overflow-hidden rounded-2xl border border-[#1e293b] bg-[#0a0e27]">
-            <WalletPage appearance="terminal" />
-          </div>
-        )}
+        {tab === 'wallet' &&
+          (auth ? (
+            <div className="mobile-trading-subpage -mx-1 overflow-hidden rounded-2xl border border-[#1e293b] bg-[#0a0e27]">
+              <WalletPage appearance="terminal" />
+            </div>
+          ) : (
+            <GuestFundsPanel onLogin={requireAuth} onRegister={props.onRegister ?? requireAuth} />
+          ))}
         {tab === 'profile' && (
           <ProfileTradingMenu
             onNavigate={go}
@@ -303,6 +333,7 @@ function AccountHomeTab({
   onSelectSymbol,
   isAuthenticated,
   onLogin,
+  onRegister,
 }: {
   account: AccountSummary
   transactions: { id: string; type: string; amount: number; createdAt: string }[]
@@ -313,51 +344,87 @@ function AccountHomeTab({
   onSelectSymbol: (symbol: any) => void
   isAuthenticated: boolean
   onLogin?: () => void
+  onRegister?: () => void
 }) {
-  const marginLevelDisplay =
-    account.marginLevel > 0 ? `${account.marginLevel.toFixed(1)}%` : '—'
+  const auth = isAuthenticated
 
   return (
     <div className="space-y-4 pb-4">
-      <section className="relative overflow-hidden rounded-2xl border border-[#6366f1]/30 bg-gradient-to-br from-[#111538] via-[#0d1230] to-[#070b1a] p-5 shadow-[0_0_40px_rgba(99,102,241,0.12)]">
-        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[#6366f1]/20 blur-2xl" />
-        <p className="text-xs font-medium uppercase tracking-widest text-[#94a3b8]">Account equity</p>
-        <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-white">{formatMoney(account.equity)}</p>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
-            <p className="text-[9px] uppercase text-[#64748b]">Margin lvl</p>
-            <p className="font-mono text-sm font-semibold text-[#22d3ee]">{marginLevelDisplay}</p>
+      {!auth ? (
+        <section className="relative overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538] p-5">
+          <p className="text-xs font-semibold uppercase tracking-widest text-[#64748b]">Client portal</p>
+          <h2 className="mt-2 text-xl font-bold text-white">Sign in to your trading account</h2>
+          <p className="mt-2 text-sm leading-relaxed text-[#94a3b8]">
+            Balances, margin, and positions are shown only after login. You can still browse live markets and charts.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onLogin}
+              className="rounded-xl bg-[#6366f1] py-3 text-sm font-bold text-white"
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={onRegister}
+              className="rounded-xl border border-[#6366f1]/50 bg-[#0d1230] py-3 text-sm font-bold text-[#a5b4fc]"
+            >
+              Open account
+            </button>
           </div>
-          <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
-            <p className="text-[9px] uppercase text-[#64748b]">Open P/L</p>
-            <p className={`font-mono text-sm font-semibold ${account.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {account.profit >= 0 ? '+' : ''}
-              {formatMoney(account.profit)}
-            </p>
+        </section>
+      ) : (
+        <section className="relative overflow-hidden rounded-2xl border border-[#6366f1]/30 bg-gradient-to-br from-[#111538] via-[#0d1230] to-[#070b1a] p-5 shadow-[0_0_40px_rgba(99,102,241,0.12)]">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[#6366f1]/20 blur-2xl" />
+          <p className="text-xs font-medium uppercase tracking-widest text-[#94a3b8]">Account equity</p>
+          <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-white">
+            {formatUsdIfAuth(account.equity, true)}
+          </p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
+              <p className="text-[9px] uppercase text-[#64748b]">Margin lvl</p>
+              <p className="font-mono text-sm font-semibold text-[#22d3ee]">
+                {formatMarginLevelIfAuth(account.marginLevel, true)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
+              <p className="text-[9px] uppercase text-[#64748b]">Open P/L</p>
+              <p
+                className={`font-mono text-sm font-semibold ${account.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+              >
+                {formatPlIfAuth(account.profit, true)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
+              <p className="text-[9px] uppercase text-[#64748b]">Positions</p>
+              <p className="font-mono text-sm font-semibold text-white">{positions.length}</p>
+            </div>
           </div>
-          <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
-            <p className="text-[9px] uppercase text-[#64748b]">Positions</p>
-            <p className="font-mono text-sm font-semibold text-white">{positions.length}</p>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="grid grid-cols-4 gap-2">
-        <QuickAction icon={LineChart} label="Trade" onClick={() => onNavigate('trade')} accent="purple" />
+        <QuickAction
+          icon={LineChart}
+          label="Trade"
+          onClick={() => (auth ? onNavigate('trade') : onLogin?.())}
+          accent="purple"
+        />
         <QuickAction icon={TrendingUp} label="Markets" onClick={() => onNavigate('markets')} accent="cyan" />
-        <QuickAction icon={ArrowDownLeft} label="Deposit" onClick={() => onNavigate('wallet')} accent="green" />
-        <QuickAction icon={ArrowUpRight} label="Withdraw" onClick={() => onNavigate('wallet')} accent="amber" />
+        <QuickAction
+          icon={ArrowDownLeft}
+          label="Deposit"
+          onClick={() => (auth ? onNavigate('wallet') : onLogin?.())}
+          accent="green"
+        />
+        <QuickAction
+          icon={ArrowUpRight}
+          label="Withdraw"
+          onClick={() => (auth ? onNavigate('wallet') : onLogin?.())}
+          accent="amber"
+        />
       </section>
-
-      {!isAuthenticated && onLogin && (
-        <button
-          type="button"
-          onClick={onLogin}
-          className="w-full rounded-xl bg-gradient-to-r from-[#6366f1] to-[#3b82f6] py-3 text-sm font-bold text-white shadow-lg shadow-indigo-900/40"
-        >
-          Sign in to trade live
-        </button>
-      )}
 
       <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-4">
         <div className="mb-3 flex items-center justify-between">
@@ -411,7 +478,9 @@ function AccountHomeTab({
             Terminal
           </button>
         </div>
-        {positions.length === 0 ? (
+        {!auth ? (
+          <p className="text-sm text-[#64748b]">Sign in to view open positions and margin usage.</p>
+        ) : positions.length === 0 ? (
           <p className="text-sm text-[#64748b]">No open trades — tap Trade to open a position.</p>
         ) : (
           <ul className="space-y-2">
@@ -431,8 +500,7 @@ function AccountHomeTab({
                     </p>
                   </div>
                   <p className={`font-mono text-sm font-bold ${p.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {p.profit >= 0 ? '+' : ''}
-                    {formatMoney(p.profit)}
+                    {formatPlIfAuth(p.profit, true)}
                   </p>
                 </div>
               </li>
@@ -448,7 +516,9 @@ function AccountHomeTab({
             Funds
           </button>
         </div>
-        {transactions.length === 0 ? (
+        {!auth ? (
+          <p className="text-sm text-[#64748b]">Account ledger available after sign in.</p>
+        ) : transactions.length === 0 ? (
           <p className="text-sm text-[#64748b]">No ledger entries yet</p>
         ) : (
           <ul className="divide-y divide-[#1e293b]">
@@ -459,8 +529,7 @@ function AccountHomeTab({
                   <p className="text-[10px] text-[#64748b]">{new Date(tx.createdAt).toLocaleString()}</p>
                 </div>
                 <span className={`font-mono text-sm font-semibold ${tx.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {tx.amount >= 0 ? '+' : ''}
-                  {formatMoney(tx.amount)}
+                  {formatPlIfAuth(tx.amount, true)}
                 </span>
               </li>
             ))}
@@ -501,6 +570,30 @@ function QuickAction({
       </span>
       <span className="text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</span>
     </button>
+  )
+}
+
+function GuestFundsPanel({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
+  return (
+    <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-6 text-center">
+      <WalletIcon className="mx-auto h-10 w-10 text-[#6366f1]" />
+      <h2 className="mt-3 text-lg font-bold text-white">Funds & wallet</h2>
+      <p className="mt-2 text-sm text-[#94a3b8]">
+        Deposits, withdrawals, and balances are linked to your trading account. Sign in to continue.
+      </p>
+      <div className="mt-5 grid grid-cols-2 gap-2">
+        <button type="button" onClick={onLogin} className="rounded-xl bg-[#6366f1] py-3 text-sm font-bold text-white">
+          Sign in
+        </button>
+        <button
+          type="button"
+          onClick={onRegister}
+          className="rounded-xl border border-[#1e293b] bg-[#0d1230] py-3 text-sm font-bold text-white"
+        >
+          Register
+        </button>
+      </div>
+    </section>
   )
 }
 

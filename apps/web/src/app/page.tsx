@@ -27,6 +27,7 @@ import {
 import { contractSize } from '@/lib/contract-sizes'
 import { isDemoAutoLoginEnabled } from '@/lib/public-env'
 import { useQueryClient } from '@tanstack/react-query'
+import { EMPTY_TRADING_ACCOUNT } from '@/lib/account-display'
 
 const symbolMeta: Record<string, { icon: string }> = {
   EURUSD: { icon: '€' },
@@ -59,31 +60,30 @@ const symbolMeta: Record<string, { icon: string }> = {
   AMD: { icon: 'AMD' },
 }
 
-const defaultAccount = {
-  balance: 10000,
-  credit: 0,
-  equity: 10000,
-  freeMargin: 10000,
-  margin: 0,
-  marginLevel: 0,
-  profit: 0,
-}
-
 export default function TradingPlatform() {
-  const { user, accessToken, setCredentials, logout } = useAuthStore()
+  const { user, accessToken, setCredentials, logout: storeLogout } = useAuthStore()
+  const queryClient = useQueryClient()
+  const logout = () => {
+    storeLogout()
+    queryClient.removeQueries({ queryKey: ['account-summary'] })
+    queryClient.removeQueries({ queryKey: ['account-dashboard'] })
+    queryClient.removeQueries({ queryKey: ['account-transactions'] })
+    queryClient.removeQueries({ queryKey: ['positions-open'] })
+  }
   const [activePage, setActivePage] = useState('chart')
   const accountSummary = useAccountSummary()
-  const account = accountSummary
-    ? {
-        balance: Number(accountSummary.balance),
-        credit: 0,
-        equity: Number(accountSummary.equity),
-        freeMargin: Number(accountSummary.freeMargin),
-        margin: Number(accountSummary.margin),
-        marginLevel: Number(accountSummary.marginLevel),
-        profit: Number((accountSummary as any).profit ?? 0),
-      }
-    : defaultAccount
+  const account =
+    accessToken && accountSummary
+      ? {
+          balance: Number(accountSummary.balance),
+          credit: 0,
+          equity: Number(accountSummary.equity),
+          freeMargin: Number(accountSummary.freeMargin),
+          margin: Number(accountSummary.margin),
+          marginLevel: Number(accountSummary.marginLevel),
+          profit: Number((accountSummary as any).profit ?? 0),
+        }
+      : { ...EMPTY_TRADING_ACCOUNT }
   const [lotSize, setLotSize] = useState(0.01)
   const [isMobileTradeOpen, setIsMobileTradeOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'chart' | 'positions'>('chart')
@@ -103,9 +103,6 @@ export default function TradingPlatform() {
   const dataSource = marketCatalog?.dataSource ?? symbols[0]?.dataSource ?? 'simulated'
   const { snapshot: priceSnapshot } = usePriceSocket()
   const [selectedSymbol, setSelectedSymbol] = useState(symbols[0])
-  const queryClient = useQueryClient()
-
-
   useEffect(() => {
     if (!selectedSymbol && symbols.length > 0) {
       setSelectedSymbol(symbols[0])
@@ -348,8 +345,10 @@ export default function TradingPlatform() {
       profit: account.profit,
     },
     userName: user?.email?.split('@')[0],
+    accountId: user?.userId,
     onLogout: logout,
     onLogin: () => setShowAuth(true),
+    onRegister: () => setShowAuth(true),
     isAuthenticated: !!accessToken,
     selectedSymbol,
     symbols,

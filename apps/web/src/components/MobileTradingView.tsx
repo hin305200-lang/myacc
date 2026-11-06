@@ -22,6 +22,8 @@ interface MobileTradingViewProps {
   layout?: 'terminal' | 'banking' | 'account'
   initialView?: 'chart' | 'market' | 'order'
   showNav?: boolean
+  isAuthenticated?: boolean
+  onRequireAuth?: () => void
 }
 
 type MobileView = 'chart' | 'market' | 'order'
@@ -41,6 +43,8 @@ export default function MobileTradingView({
   layout = 'terminal',
   initialView = 'chart',
   showNav = true,
+  isAuthenticated = true,
+  onRequireAuth,
 }: MobileTradingViewProps) {
   const [activeView, setActiveView] = useState<MobileView>(initialView)
   const isAccount = layout === 'account' || layout === 'banking'
@@ -128,23 +132,35 @@ export default function MobileTradingView({
             </div>
 
             {isAccount && (
-              <div className="grid grid-cols-2 gap-2 border-t border-[#1e293b] bg-[#0d1230] p-3">
-                <button
-                  type="button"
-                  disabled={tradeLoading}
-                  onClick={() => onTrade('SELL')}
-                  className="rounded-xl bg-gradient-to-b from-[#ef4444] to-[#dc2626] py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-red-900/30 disabled:opacity-50"
-                >
-                  Sell {lotSize} lot
-                </button>
-                <button
-                  type="button"
-                  disabled={tradeLoading}
-                  onClick={() => onTrade('BUY')}
-                  className="rounded-xl bg-gradient-to-b from-[#22c55e] to-[#16a34a] py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-green-900/30 disabled:opacity-50"
-                >
-                  Buy {lotSize} lot
-                </button>
+              <div className="border-t border-[#1e293b] bg-[#0d1230] p-3">
+                {!isAuthenticated ? (
+                  <button
+                    type="button"
+                    onClick={onRequireAuth}
+                    className="w-full rounded-xl bg-gradient-to-r from-[#6366f1] to-[#3b82f6] py-3.5 text-sm font-bold uppercase tracking-wide text-white"
+                  >
+                    Sign in to place orders
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={tradeLoading}
+                      onClick={() => onTrade('SELL')}
+                      className="rounded-xl bg-gradient-to-b from-[#ef4444] to-[#dc2626] py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-red-900/30 disabled:opacity-50"
+                    >
+                      Sell {lotSize} lot
+                    </button>
+                    <button
+                      type="button"
+                      disabled={tradeLoading}
+                      onClick={() => onTrade('BUY')}
+                      className="rounded-xl bg-gradient-to-b from-[#22c55e] to-[#16a34a] py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-green-900/30 disabled:opacity-50"
+                    >
+                      Buy {lotSize} lot
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

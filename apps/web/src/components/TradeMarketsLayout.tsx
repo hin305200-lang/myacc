@@ -66,6 +66,8 @@ export default function TradeMarketsLayout({
     }).format(value)
   }
 
+  const money = (value: number) => (userId ? `$${formatCurrency(value)}` : '—')
+
   return (
     <div className="h-screen flex flex-col bg-[#0a0e27] text-white overflow-hidden">
       {/* Top Header */}
@@ -82,34 +84,34 @@ export default function TradeMarketsLayout({
         <div className="flex flex-wrap items-center gap-2 sm:gap-4 lg:gap-6 text-[10px] sm:text-xs w-full sm:w-auto justify-between sm:justify-start">
           <div className="flex flex-col">
             <span className="text-[#94a3b8]">Balance</span>
-            <span className="text-white font-semibold text-xs sm:text-sm">${formatCurrency(account.balance)}</span>
+            <span className="text-white font-semibold text-xs sm:text-sm">{money(account.balance)}</span>
           </div>
           <div className="flex flex-col hidden sm:flex">
             <span className="text-[#94a3b8]">Credit</span>
-            <span className="text-white font-semibold text-xs sm:text-sm">${formatCurrency(account.credit)}</span>
+            <span className="text-white font-semibold text-xs sm:text-sm">{money(account.credit)}</span>
           </div>
           <div className="flex flex-col">
             <span className="text-[#94a3b8]">Equity</span>
-            <span className="text-white font-semibold text-xs sm:text-sm">${formatCurrency(account.equity)}</span>
+            <span className="text-white font-semibold text-xs sm:text-sm">{money(account.equity)}</span>
           </div>
           <div className="flex flex-col hidden md:flex">
             <span className="text-[#94a3b8]">Margin</span>
-            <span className="text-white font-semibold text-xs sm:text-sm">${formatCurrency(account.margin)}</span>
+            <span className="text-white font-semibold text-xs sm:text-sm">{money(account.margin)}</span>
           </div>
           <div className="flex flex-col hidden lg:flex">
             <span className="text-[#94a3b8]">Free margin</span>
-            <span className="text-white font-semibold text-xs sm:text-sm">${formatCurrency(account.freeMargin)}</span>
+            <span className="text-white font-semibold text-xs sm:text-sm">{money(account.freeMargin)}</span>
           </div>
           <div className="flex flex-col hidden xl:flex">
             <span className="text-[#94a3b8]">Margin level</span>
             <span className="text-white font-semibold text-xs sm:text-sm">
-              {account.marginLevel > 0 ? formatCurrency(account.marginLevel) : '0.00'}%
+              {userId ? (account.marginLevel > 0 ? `${formatCurrency(account.marginLevel)}%` : '0.00%') : '—'}
             </span>
           </div>
           <div className="flex flex-col">
             <span className="text-[#94a3b8]">P/L</span>
-            <span className={`font-semibold text-xs sm:text-sm ${account.profit >= 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
-              {account.profit >= 0 ? '+' : ''}${formatCurrency(account.profit)}
+            <span className={`font-semibold text-xs sm:text-sm ${userId && account.profit >= 0 ? 'text-[#22c55e]' : userId ? 'text-[#ef4444]' : 'text-[#94a3b8]'}`}>
+              {userId ? `${account.profit >= 0 ? '+' : ''}$${formatCurrency(account.profit)}` : '—'}
             </span>
           </div>
         </div>
