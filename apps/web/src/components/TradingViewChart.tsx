@@ -83,8 +83,13 @@ export default function TradingViewChart({ symbol }: TradingViewChartProps) {
       locale: 'en',
       enable_publishing: false,
       allow_symbol_change: false,
+      hide_side_toolbar: false,
+      hide_top_toolbar: false,
+      withdateranges: false,
       calendar: false,
       support_host: 'https://www.tradingview.com',
+      backgroundColor: '#0f1216',
+      gridColor: 'rgba(42, 46, 53, 0.6)',
     })
 
     widgetContainer.appendChild(widgetDiv)
@@ -99,7 +104,7 @@ export default function TradingViewChart({ symbol }: TradingViewChartProps) {
   }, [tvSymbol])
 
   return (
-    <div className="w-full h-full relative bg-[#1a1d2e]">
+    <div className="w-full h-full relative bg-[#0f1216]">
       <div ref={containerRef} className="w-full h-full" />
     </div>
   )

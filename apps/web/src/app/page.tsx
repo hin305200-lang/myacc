@@ -355,31 +355,10 @@ export default function TradingPlatform() {
       default:
         return (
           <>
-            {/* Desktop View - Only visible on desktop */}
-            <div className="hidden lg:flex flex-1 flex-col lg:flex-row overflow-hidden">
-              {/* Chart Panel (Center-Left) */}
-              <div className="flex-1 flex flex-col overflow-hidden bg-[#1a1d2e] min-w-0">
-                {/* Chart Tabs */}
-                <div className="flex items-center gap-1 px-3 py-2 border-b border-[#2d3142] bg-[#252836]">
-                  <button className="px-3 py-1 text-xs font-semibold bg-[#4f46e5] text-white rounded">Chart</button>
-                  <button className="px-3 py-1 text-xs font-semibold text-[#8e92a3] hover:text-white">News</button>
-                  <button className="px-3 py-1 text-xs font-semibold text-[#8e92a3] hover:text-white">Heatmap</button>
-                  <button className="ml-auto px-2 py-1 text-xs text-[#8e92a3] hover:text-white">+</button>
-                </div>
-                
-                {/* Chart */}
-                <div className="flex-1 overflow-hidden">
-                  <TradingViewChart symbol={selectedMeta} />
-                </div>
-
-                {/* Bottom Panel */}
-                <div className="h-[200px] border-t border-[#1e293b]">
-                  <BottomPanel positions={positions} onClosePosition={handleClosePosition} />
-                </div>
-              </div>
-
-              {/* Market Watch (Center-Right) */}
-              <div className="w-[280px] xl:w-[300px] border-l border-[#1e293b] flex-shrink-0">
+            {/* Desktop ModMount layout: Watch LEFT · Chart CENTER · Order RIGHT · Positions BOTTOM */}
+            <div className="hidden lg:flex flex-1 overflow-hidden bg-[#12151a] min-h-0">
+              {/* Left — Market Watch (full height) */}
+              <div className="w-[270px] xl:w-[300px] flex-shrink-0 h-full">
                 <MarketWatch
                   symbols={symbols}
                   selectedSymbol={selectedSymbol}
@@ -388,18 +367,62 @@ export default function TradingPlatform() {
                 />
               </div>
 
-              {/* Order Panel (Right Sidebar) */}
-              <div className="w-[320px] xl:w-[340px] border-l border-[#1e293b] flex-shrink-0">
-                <OrderPanel
-                  symbol={selectedSymbol ?? null}
-                  lotSize={lotSize}
-                  onLotSizeChange={setLotSize}
-                  onTrade={handleTrade}
-                  tradeLoading={tradeLoading}
-                  tradingLocked={!!accessToken && !canTrade}
-                  tradingLockedReason="Pending admin approval — use Chat to contact support"
-                  leverage={Number(accountSummary?.leverage ?? 10)}
-                />
+              {/* Right stack — chart + order on top, positions below */}
+              <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                <div className="flex flex-1 min-h-0 overflow-hidden">
+                  {/* Center chart */}
+                  <div className="flex-1 flex flex-col min-w-0 bg-[#0f1216]">
+                    <div className="h-9 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[#2a2e35] bg-[#15181d]">
+                      <span className="text-sm font-semibold tracking-wide text-white">
+                        {selectedSymbol.symbol}
+                      </span>
+                      <span className="text-[11px] font-mono text-[#9ca3af]">
+                        {selectedSymbol.bid.toFixed(selectedSymbol.bid > 100 ? 2 : 5)}
+                      </span>
+                      <span
+                        className={`text-[11px] font-mono font-semibold ${
+                          selectedSymbol.changePercent >= 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'
+                        }`}
+                      >
+                        {selectedSymbol.changePercent >= 0 ? '+' : ''}
+                        {selectedSymbol.changePercent.toFixed(2)}%
+                      </span>
+                      <span className="ml-auto text-[10px] uppercase tracking-wide text-[#6b7280]">
+                        {selectedSymbol.marketStatus === 'open' ? 'Market open' : 'Market closed'}
+                      </span>
+                    </div>
+                    <div className="flex-1 overflow-hidden min-h-0">
+                      <TradingViewChart symbol={selectedMeta} />
+                    </div>
+                  </div>
+
+                  {/* Right — order ticket (kept, placed like a dealing panel) */}
+                  <div className="w-[280px] xl:w-[300px] flex-shrink-0 border-l border-[#2a2e35] bg-[#15181d]">
+                    <OrderPanel
+                      symbol={selectedSymbol ?? null}
+                      lotSize={lotSize}
+                      onLotSizeChange={setLotSize}
+                      onTrade={handleTrade}
+                      tradeLoading={tradeLoading}
+                      tradingLocked={!!accessToken && !canTrade}
+                      tradingLockedReason="Pending admin approval — use Chat to contact support"
+                      leverage={Number(accountSummary?.leverage ?? 10)}
+                    />
+                  </div>
+                </div>
+
+                {/* Bottom — open positions / pending / finance / closed */}
+                <div className="h-[210px] xl:h-[230px] flex-shrink-0">
+                  <BottomPanel
+                    positions={positions}
+                    onClosePosition={handleClosePosition}
+                    onCloseAll={async () => {
+                      for (const p of positions) {
+                        await handleClosePosition(p.id)
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
             {accessToken && !canTrade && (
