@@ -6,6 +6,6 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "kyc-admin-positions-20261108"
+    "REDEPLOY_STAMP": "phone-label-no-optional-20261108"
   }
 }
