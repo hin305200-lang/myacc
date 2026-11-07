@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import TradingViewChart from '@/components/TradingViewChart'
 import TradeMarketsLayout from '@/components/TradeMarketsLayout'
 import MarketWatch from '@/components/MarketWatch'
@@ -21,9 +21,10 @@ import {
   useAccountSummary,
   useOpenPositions,
   useSymbolsWithSocket,
-  usePriceSocket,
   useMarketCatalog,
+  type MarketSymbol,
 } from '@/hooks/useMarketData'
+import { useLiveMarketTicks } from '@/hooks/useLiveMarketTicks'
 import { contractSize } from '@/lib/contract-sizes'
 import { isDemoAutoLoginEnabled } from '@/lib/public-env'
 import { useQueryClient } from '@tanstack/react-query'
@@ -76,14 +77,17 @@ export default function TradingPlatform() {
     accessToken && accountSummary
       ? {
           balance: Number(accountSummary.balance),
-          credit: Number((accountSummary as any).credit ?? 0),
+          credit: Number(accountSummary.credit ?? 0),
           equity: Number(accountSummary.equity),
           freeMargin: Number(accountSummary.freeMargin),
           margin: Number(accountSummary.margin),
-          marginLevel: Number(accountSummary.marginLevel),
-          profit: Number((accountSummary as any).profit ?? 0), // floating P/L
+          marginLevel: accountSummary.marginLevel,
+          profit: Number(accountSummary.profit ?? 0),
+          floatingProfit: Number(accountSummary.floatingProfit ?? 0),
+          floatingLoss: Number(accountSummary.floatingLoss ?? 0),
+          marginAlert: accountSummary.marginAlert ?? { level: 'ok' as const },
         }
-      : { ...EMPTY_TRADING_ACCOUNT }
+      : { ...EMPTY_TRADING_ACCOUNT, marginAlert: { level: 'ok' as const } }
   const [lotSize, setLotSize] = useState(0.01)
   const [isMobileTradeOpen, setIsMobileTradeOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'chart' | 'positions'>('chart')
@@ -98,16 +102,44 @@ export default function TradingPlatform() {
   const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL ?? 'demo@nexus.trade'
   const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? 'password123'
 
-  const symbols = useSymbolsWithSocket()
+  const restSymbols = useSymbolsWithSocket()
+  const { ticks: liveTicks, connected: liveFeedConnected } = useLiveMarketTicks(true)
+  const symbols = useMemo(() => {
+    return restSymbols.map((s) => {
+      const tick = liveTicks[s.symbol]
+      return tick ? ({ ...s, ...tick, symbol: s.symbol } as MarketSymbol) : s
+    })
+  }, [restSymbols, liveTicks])
   const marketCatalog = useMarketCatalog()
-  const dataSource = marketCatalog?.dataSource ?? symbols[0]?.dataSource ?? 'simulated'
-  const { snapshot: priceSnapshot } = usePriceSocket()
-  const [selectedSymbol, setSelectedSymbol] = useState(symbols[0])
+  const dataSource =
+    marketCatalog?.dataSource ??
+    (liveFeedConnected ? 'live' : symbols.find((s) => s.dataSource === 'live')?.dataSource) ??
+    'delayed'
+  const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol | undefined>(symbols[0])
   useEffect(() => {
     if (!selectedSymbol && symbols.length > 0) {
       setSelectedSymbol(symbols[0])
+      return
+    }
+    if (selectedSymbol) {
+      const fresh = symbols.find((s) => s.symbol === selectedSymbol.symbol)
+      if (fresh && (fresh.bid !== selectedSymbol.bid || fresh.ask !== selectedSymbol.ask)) {
+        setSelectedSymbol(fresh)
+      }
     }
   }, [symbols, selectedSymbol])
+
+  const lastMarginAlert = useRef<string>('')
+  useEffect(() => {
+    const alert = account.marginAlert
+    if (!alert || alert.level === 'ok') return
+    if (lastMarginAlert.current === alert.message) return
+    lastMarginAlert.current = alert.message
+    setToast({
+      message: alert.message,
+      type: alert.level === 'stop_out' ? 'error' : 'info',
+    })
+  }, [account.marginAlert])
 
   useEffect(() => {
     if (accessToken || authAttempted) return
@@ -154,22 +186,21 @@ export default function TradingPlatform() {
 
   const { positions: openPositions, refetch: refetchPositions } = useOpenPositions()
 
-  // Update positions with real-time prices
+  // Display positions with live BID/ASK overlay; backend remains source of truth on poll
   const positions = useMemo(() => {
     return openPositions.map((order) => {
-      // Get real-time price from socket snapshot
-      const marketPrice = priceSnapshot.find((s) => s.symbol === order.symbol)
+      const marketPrice = symbols.find((s) => s.symbol === order.symbol)
       const currentPrice = marketPrice
         ? order.side === 'BUY'
           ? marketPrice.bid
           : marketPrice.ask
         : Number(order.currentPrice)
 
-      // Calculate real-time profit
       const size = contractSize(order.symbol)
-      const priceDiff = order.side === 'BUY' 
-        ? currentPrice - Number(order.openPrice)
-        : Number(order.openPrice) - currentPrice
+      const priceDiff =
+        order.side === 'BUY'
+          ? currentPrice - Number(order.openPrice)
+          : Number(order.openPrice) - currentPrice
       const realTimeProfit = priceDiff * size * Number(order.lotSize)
 
       return {
@@ -184,10 +215,11 @@ export default function TradingPlatform() {
         takeProfit: order.takeProfit ? Number(order.takeProfit) : 0,
         swap: order.swap ? Number(order.swap) : 0,
         commission: order.commission ? Number(order.commission) : 0,
-        profit: realTimeProfit,
+        // Prefer live overlay for UI; backend summary poll settles official P/L
+        profit: Number.isFinite(realTimeProfit) ? realTimeProfit : Number(order.profit),
       }
     })
-  }, [openPositions, priceSnapshot])
+  }, [openPositions, symbols])
 
   // Keep account status fresh so trading stays locked until admin approval.
   useEffect(() => {
@@ -359,13 +391,14 @@ export default function TradingPlatform() {
               {/* Order Panel (Right Sidebar) */}
               <div className="w-[320px] xl:w-[340px] border-l border-[#1e293b] flex-shrink-0">
                 <OrderPanel
-                  symbol={selectedSymbol}
+                  symbol={selectedSymbol ?? null}
                   lotSize={lotSize}
                   onLotSizeChange={setLotSize}
                   onTrade={handleTrade}
                   tradeLoading={tradeLoading}
                   tradingLocked={!!accessToken && !canTrade}
                   tradingLockedReason="Pending admin approval — use Chat to contact support"
+                  leverage={Number(accountSummary?.leverage ?? 10)}
                 />
               </div>
             </div>

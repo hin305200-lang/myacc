@@ -11,7 +11,7 @@ interface MobileTradingViewProps {
   selectedSymbol: any
   symbols: any[]
   symbolMeta: Record<string, { icon: string }>
-  dataSource?: 'live' | 'simulated'
+  dataSource?: 'live' | 'delayed' | 'unavailable' | 'simulated'
   onSelectSymbol: (symbol: any) => void
   lotSize: number
   onLotSizeChange: (size: number) => void

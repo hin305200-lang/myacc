@@ -49,8 +49,10 @@ interface AccountSummary {
   equity: number
   freeMargin: number
   margin: number
-  marginLevel: number
+  marginLevel: number | null
   profit: number
+  floatingProfit?: number
+  floatingLoss?: number
 }
 
 interface MobileBankingExperienceProps {
@@ -64,7 +66,7 @@ interface MobileBankingExperienceProps {
   selectedSymbol: any
   symbols: any[]
   symbolMeta: Record<string, { icon: string }>
-  dataSource?: 'live' | 'simulated'
+  dataSource?: 'live' | 'delayed' | 'unavailable' | 'simulated'
   onSelectSymbol: (symbol: any) => void
   lotSize: number
   onLotSizeChange: (size: number) => void
@@ -122,7 +124,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                 Sign in
               </button>
             )}
-            <LiveBadge live={props.dataSource === 'live'} />
+            <LiveBadge live={props.dataSource === 'live'} label={props.dataSource === 'live' ? 'Live' : props.dataSource === 'unavailable' ? 'Down' : 'Delayed'} />
             <button
               type="button"
               onClick={() => go('notifications')}
@@ -261,7 +263,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
   )
 }
 
-function LiveBadge({ live }: { live: boolean }) {
+function LiveBadge({ live, label }: { live: boolean; label?: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
@@ -269,7 +271,7 @@ function LiveBadge({ live }: { live: boolean }) {
       }`}
     >
       <Radio className={`h-3 w-3 ${live ? 'animate-pulse' : ''}`} />
-      {live ? 'Live' : 'Sim'}
+      {label || (live ? 'Live' : 'Delayed')}
     </span>
   )
 }

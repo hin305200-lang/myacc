@@ -1,4 +1,4 @@
-/** Matches backend trading-engine CONTRACT_SIZES for P/L display */
+/** Matches backend instrument-specs contract sizes for P/L / margin display */
 export const CONTRACT_SIZES: Record<string, number> = {
   EURUSD: 100000,
   GBPUSD: 100000,

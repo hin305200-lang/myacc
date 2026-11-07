@@ -15,8 +15,11 @@ interface TradeMarketsLayoutProps {
     equity: number
     margin: number
     freeMargin: number
-    marginLevel: number
+    marginLevel: number | null
     profit: number
+    floatingProfit?: number
+    floatingLoss?: number
+    marginAlert?: { level: string; message?: string }
   }
   userId?: string
   onLogout?: () => void
@@ -105,7 +108,11 @@ export default function TradeMarketsLayout({
           <div className="flex flex-col hidden xl:flex">
             <span className="text-[#94a3b8]">Margin level</span>
             <span className="text-white font-semibold text-xs sm:text-sm">
-              {userId ? (account.marginLevel > 0 ? `${Number(account.marginLevel).toFixed(2)}%` : '—') : '—'}
+              {userId
+                ? account.marginLevel != null && account.marginLevel > 0
+                  ? `${Number(account.marginLevel).toFixed(2)}%`
+                  : 'N/A'
+                : '—'}
             </span>
           </div>
           <div className="flex flex-col">
@@ -114,6 +121,11 @@ export default function TradeMarketsLayout({
               {userId ? `${account.profit >= 0 ? '+' : ''}$${formatCurrency(account.profit)}` : '—'}
             </span>
           </div>
+          {account.marginAlert && account.marginAlert.level !== 'ok' && (
+            <div className={`text-[10px] font-semibold px-2 py-1 rounded ${account.marginAlert.level === 'stop_out' ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-200'}`}>
+              {account.marginAlert.level === 'stop_out' ? 'STOP-OUT' : 'MARGIN CALL'}
+            </div>
+          )}
         </div>
 
         {/* User ID and Menu */}

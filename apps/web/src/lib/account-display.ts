@@ -4,9 +4,11 @@ export const EMPTY_TRADING_ACCOUNT = {
   equity: 0,
   freeMargin: 0,
   margin: 0,
-  marginLevel: 0,
-  profit: 0, // floating P/L
-} as const
+  marginLevel: null as number | null,
+  profit: 0, // net floating P/L
+  floatingProfit: 0,
+  floatingLoss: 0,
+}
 
 /** Equity = Balance + Credit + Floating P/L */
 export function computeEquity(balance: number, credit: number, floatingPl: number) {
@@ -40,9 +42,9 @@ export function formatPlIfAuth(value: number, authenticated: boolean) {
   return `${prefix}${formatUsd(value)}`
 }
 
-export function formatMarginLevelIfAuth(level: number, authenticated: boolean) {
+export function formatMarginLevelIfAuth(level: number | null | undefined, authenticated: boolean) {
   if (!authenticated) return '—'
-  if (level <= 0) return '—'
+  if (level == null || !Number.isFinite(level) || level <= 0) return 'N/A'
   return `${level.toFixed(1)}%`
 }
 

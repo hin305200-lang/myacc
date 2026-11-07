@@ -1,113 +1,211 @@
+/**
+ * Real market data layer — biquote MT5 feed (no simulated random walk).
+ * BID/ASK come from the provider. Closed/stale quotes are labeled, never invented.
+ */
+import {
+  ALL_PLATFORM_SYMBOLS,
+  getInstrument,
+  providerSymbolFor,
+  type InstrumentCategory,
+} from './instrument-specs'
+
+export type FeedStatus = 'live' | 'delayed' | 'closed' | 'unavailable'
+
 export type MarketQuote = {
   symbol: string
+  providerSymbol: string
   price: number
   bid: number
   ask: number
   spread: number
   changePercent: number
-  category: 'forex' | 'crypto' | 'stocks' | 'commodities' | 'indices'
+  category: InstrumentCategory
+  dataSource: 'live' | 'delayed' | 'unavailable'
+  feedStatus: FeedStatus
+  marketStatus: 'open' | 'closed' | 'unavailable'
+  tradable: boolean
+  stale: boolean
+  quoteAgeSeconds: number | null
+  updatedAt: string | null
+  source: string
 }
 
-const SEED: Record<string, { price: number; category: MarketQuote['category'] }> = {
-  EURUSD: { price: 1.102, category: 'forex' },
-  GBPUSD: { price: 1.279, category: 'forex' },
-  USDJPY: { price: 151.3, category: 'forex' },
-  AUDUSD: { price: 0.665, category: 'forex' },
-  EURNOK: { price: 11.25, category: 'forex' },
-  USDQAR: { price: 3.64, category: 'forex' },
-  USDMXN: { price: 17.0, category: 'forex' },
-  BTCUSD: { price: 68250, category: 'crypto' },
-  ETHUSD: { price: 3450, category: 'crypto' },
-  SOLUSD: { price: 110, category: 'crypto' },
-  XRPUSD: { price: 0.62, category: 'crypto' },
-  XAUUSD: { price: 2375, category: 'commodities' },
-  XAGUSD: { price: 28.4, category: 'commodities' },
-  UKOIL: { price: 79.2, category: 'commodities' },
-  USOIL: { price: 76.5, category: 'commodities' },
-  SPX500: { price: 5450, category: 'indices' },
-  NAS100: { price: 18750, category: 'indices' },
-  DJI30: { price: 39850, category: 'indices' },
-  DAX40: { price: 18800, category: 'indices' },
-  AAPL: { price: 225, category: 'stocks' },
-  MSFT: { price: 465, category: 'stocks' },
-  AMZN: { price: 195, category: 'stocks' },
-  TSLA: { price: 240, category: 'stocks' },
-  NVDA: { price: 495, category: 'stocks' },
-  GOOGL: { price: 145, category: 'stocks' },
-  META: { price: 485, category: 'stocks' },
-  NFLX: { price: 620, category: 'stocks' },
-  AMD: { price: 165, category: 'stocks' },
+type ProviderTick = {
+  symbol?: string
+  bid?: number
+  ask?: number
+  mid?: number
+  spread?: number
+  dayDiffPercent?: number
+  marketState?: string
+  stale?: boolean
+  quoteAgeSeconds?: number
+  timestamp?: string
+  lastQuoteAt?: string
+  source?: string
+  message?: string
 }
 
-const liveCache = new Map<string, number>()
-let lastFetch = 0
+const BIQUOTE_BASE = process.env.MARKET_DATA_URL?.replace(/\/$/, '') || 'https://biquote.io'
+/** Quotes older than this (when market claims open) are treated as delayed. */
+const DELAYED_AGE_SEC = Number(process.env.MARKET_DELAYED_AGE_SEC || 30)
+/** Hard reject for new orders when quote is older than this while market open. */
+const STALE_TRADE_AGE_SEC = Number(process.env.MARKET_STALE_TRADE_AGE_SEC || 120)
+
+const quoteCache = new Map<string, MarketQuote>()
+let lastBatchFetch = 0
 let fetchPromise: Promise<void> | null = null
+const CACHE_TTL_MS = 2_000
 
-function spreadFor(price: number) {
-  if (price > 1000) return price * 0.0002
-  if (price > 10) return 0.02
-  return 0.0002
+function roundPrice(n: number, digits = 5) {
+  const f = 10 ** digits
+  return Math.round((n + Number.EPSILON) * f) / f
 }
 
-function toQuote(symbol: string, price: number, category: MarketQuote['category']): MarketQuote {
-  const spread = spreadFor(price)
-  const seed = SEED[symbol]?.price ?? price
-  const changePercent = seed ? ((price - seed) / seed) * 100 : 0
+function classifyTick(tick: ProviderTick | null): {
+  feedStatus: FeedStatus
+  dataSource: MarketQuote['dataSource']
+  marketStatus: MarketQuote['marketStatus']
+  tradable: boolean
+} {
+  if (!tick || !(Number(tick.bid) > 0) || !(Number(tick.ask) > 0)) {
+    return {
+      feedStatus: 'unavailable',
+      dataSource: 'unavailable',
+      marketStatus: 'unavailable',
+      tradable: false,
+    }
+  }
+  const state = (tick.marketState || '').toLowerCase()
+  const age = tick.quoteAgeSeconds ?? null
+  if (state === 'closed' || tick.stale === true) {
+    return {
+      feedStatus: 'closed',
+      dataSource: 'delayed',
+      marketStatus: 'closed',
+      tradable: false,
+    }
+  }
+  if (age != null && age > STALE_TRADE_AGE_SEC) {
+    return {
+      feedStatus: 'delayed',
+      dataSource: 'delayed',
+      marketStatus: 'open',
+      tradable: false,
+    }
+  }
+  if (age != null && age > DELAYED_AGE_SEC) {
+    return {
+      feedStatus: 'delayed',
+      dataSource: 'delayed',
+      marketStatus: 'open',
+      tradable: true,
+    }
+  }
   return {
-    symbol,
-    price,
-    bid: price - spread / 2,
-    ask: price + spread / 2,
-    spread,
-    changePercent,
-    category,
+    feedStatus: 'live',
+    dataSource: 'live',
+    marketStatus: 'open',
+    tradable: true,
   }
 }
 
-async function refreshLivePrices() {
+function toQuote(platformSymbol: string, tick: ProviderTick | null): MarketQuote {
+  const inst = getInstrument(platformSymbol)!
+  const classified = classifyTick(tick)
+  const bid = Number(tick?.bid || 0)
+  const ask = Number(tick?.ask || 0)
+  const mid = Number(tick?.mid || 0) || (bid && ask ? (bid + ask) / 2 : 0)
+  const spread = Number(tick?.spread || 0) || (bid && ask ? ask - bid : 0)
+
+  return {
+    symbol: platformSymbol,
+    providerSymbol: inst.providerSymbol,
+    price: roundPrice(mid || bid || ask, inst.digits),
+    bid: roundPrice(bid, inst.digits),
+    ask: roundPrice(ask, inst.digits),
+    spread: roundPrice(spread, Math.max(inst.digits, 5)),
+    changePercent: Number(tick?.dayDiffPercent || 0),
+    category: inst.category,
+    dataSource: classified.dataSource,
+    feedStatus: classified.feedStatus,
+    marketStatus: classified.marketStatus,
+    tradable: classified.tradable && bid > 0 && ask > 0,
+    stale: Boolean(tick?.stale) || classified.feedStatus !== 'live',
+    quoteAgeSeconds: tick?.quoteAgeSeconds ?? null,
+    updatedAt: tick?.lastQuoteAt || tick?.timestamp || null,
+    source: tick?.source || 'biquote',
+  }
+}
+
+function unavailableQuote(platformSymbol: string): MarketQuote {
+  const inst = getInstrument(platformSymbol)!
+  return {
+    symbol: platformSymbol,
+    providerSymbol: inst.providerSymbol,
+    price: 0,
+    bid: 0,
+    ask: 0,
+    spread: 0,
+    changePercent: 0,
+    category: inst.category,
+    dataSource: 'unavailable',
+    feedStatus: 'unavailable',
+    marketStatus: 'unavailable',
+    tradable: false,
+    stale: true,
+    quoteAgeSeconds: null,
+    updatedAt: null,
+    source: 'biquote',
+  }
+}
+
+async function fetchLatestBatch(providerSymbols: string[]): Promise<Record<string, ProviderTick>> {
+  const unique = Array.from(new Set(providerSymbols))
+  const params = new URLSearchParams()
+  for (const s of unique) params.append('symbols', s)
+  const url = `${BIQUOTE_BASE}/api/latest?${params.toString()}`
+  const res = await fetch(url, { cache: 'no-store', next: { revalidate: 0 } as any })
+  if (!res.ok) throw new Error(`Market data HTTP ${res.status}`)
+  const data = await res.json()
+  if (!data || typeof data !== 'object') return {}
+  return data as Record<string, ProviderTick>
+}
+
+async function fetchOne(providerSymbol: string): Promise<ProviderTick | null> {
+  const res = await fetch(`${BIQUOTE_BASE}/api/${encodeURIComponent(providerSymbol)}`, {
+    cache: 'no-store',
+    next: { revalidate: 0 } as any,
+  })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Market data HTTP ${res.status}`)
+  return (await res.json()) as ProviderTick
+}
+
+async function refreshAllQuotes(force = false) {
   const now = Date.now()
-  if (now - lastFetch < 20_000) return
+  if (!force && now - lastBatchFetch < CACHE_TTL_MS && quoteCache.size > 0) return
   if (fetchPromise) return fetchPromise
 
   fetchPromise = (async () => {
     try {
-      // Free forex rates (no API key)
-      const fx = await fetch('https://api.frankfurter.app/latest?from=USD', {
-        next: { revalidate: 30 },
-      }).then((r) => (r.ok ? r.json() : null))
-      if (fx?.rates) {
-        const eur = fx.rates.EUR
-        const gbp = fx.rates.GBP
-        const jpy = fx.rates.JPY
-        const aud = fx.rates.AUD
-        const mxn = fx.rates.MXN
-        const nok = fx.rates.NOK
-        if (eur) liveCache.set('EURUSD', 1 / eur)
-        if (gbp) liveCache.set('GBPUSD', 1 / gbp)
-        if (jpy) liveCache.set('USDJPY', jpy)
-        if (aud) liveCache.set('AUDUSD', 1 / aud)
-        if (mxn) liveCache.set('USDMXN', mxn)
-        if (nok && eur) liveCache.set('EURNOK', nok / eur)
+      const providerList = ALL_PLATFORM_SYMBOLS.map((s) => providerSymbolFor(s))
+      const batch = await fetchLatestBatch(providerList)
+      for (const platform of ALL_PLATFORM_SYMBOLS) {
+        const provider = providerSymbolFor(platform)
+        const tick = batch[provider] || null
+        quoteCache.set(platform, tick ? toQuote(platform, tick) : unavailableQuote(platform))
       }
-    } catch {
-      // keep seeds
+      lastBatchFetch = Date.now()
+    } catch (err) {
+      console.error('[market-prices] batch refresh failed', err)
+      // Keep last good cache; mark missing as unavailable only if empty
+      if (quoteCache.size === 0) {
+        for (const platform of ALL_PLATFORM_SYMBOLS) {
+          quoteCache.set(platform, unavailableQuote(platform))
+        }
+      }
     }
-
-    try {
-      // Free crypto (no API key)
-      const crypto = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,ripple&vs_currencies=usd',
-        { next: { revalidate: 30 } }
-      ).then((r) => (r.ok ? r.json() : null))
-      if (crypto?.bitcoin?.usd) liveCache.set('BTCUSD', crypto.bitcoin.usd)
-      if (crypto?.ethereum?.usd) liveCache.set('ETHUSD', crypto.ethereum.usd)
-      if (crypto?.solana?.usd) liveCache.set('SOLUSD', crypto.solana.usd)
-      if (crypto?.ripple?.usd) liveCache.set('XRPUSD', crypto.ripple.usd)
-    } catch {
-      // keep seeds
-    }
-
-    lastFetch = Date.now()
   })().finally(() => {
     fetchPromise = null
   })
@@ -115,43 +213,125 @@ async function refreshLivePrices() {
   return fetchPromise
 }
 
-function drifted(seed: number) {
-  // Mild random walk so charts/ticks feel alive between live refreshes
-  const pct = (Math.sin(Date.now() / 15000 + seed) + Math.random() * 0.4 - 0.2) * 0.0008
-  return seed * (1 + pct)
+export async function getMarketSnapshot(force = false): Promise<MarketQuote[]> {
+  await refreshAllQuotes(force)
+  return ALL_PLATFORM_SYMBOLS.map((s) => quoteCache.get(s) ?? unavailableQuote(s))
 }
 
-export async function getMarketSnapshot(): Promise<MarketQuote[]> {
-  await refreshLivePrices()
-  return Object.entries(SEED).map(([symbol, cfg]) => {
-    const live = liveCache.get(symbol)
-    const price = live ?? drifted(cfg.price)
-    return toQuote(symbol, price, cfg.category)
-  })
-}
+export async function getSymbolQuote(symbol: string, opts?: { force?: boolean }): Promise<MarketQuote | null> {
+  const platform = symbol.toUpperCase()
+  if (!getInstrument(platform)) return null
 
-export async function getSymbolQuote(symbol: string): Promise<MarketQuote | null> {
-  const snap = await getMarketSnapshot()
-  return snap.find((s) => s.symbol === symbol.toUpperCase()) ?? null
+  if (opts?.force) {
+    try {
+      const tick = await fetchOne(providerSymbolFor(platform))
+      const quote = tick ? toQuote(platform, tick) : unavailableQuote(platform)
+      quoteCache.set(platform, quote)
+      return quote
+    } catch (err) {
+      console.error('[market-prices] single quote failed', platform, err)
+      return quoteCache.get(platform) ?? unavailableQuote(platform)
+    }
+  }
+
+  await refreshAllQuotes(false)
+  return quoteCache.get(platform) ?? unavailableQuote(platform)
 }
 
 export function isTradableSymbol(symbol: string) {
-  return Boolean(SEED[symbol.toUpperCase()])
+  return Boolean(getInstrument(symbol.toUpperCase()))
 }
 
-export function generateCandles(symbol: string, bars = 120) {
-  const seed = liveCache.get(symbol) ?? SEED[symbol]?.price ?? 1.1
-  const candles = []
-  let price = seed * 0.995
-  const now = Math.floor(Date.now() / 1000)
-  for (let i = bars; i >= 0; i--) {
-    const drift = (Math.random() - 0.48) * seed * 0.0015
-    const open = price
-    const close = Math.max(seed * 0.5, open + drift)
-    const high = Math.max(open, close) * (1 + Math.random() * 0.0008)
-    const low = Math.min(open, close) * (1 - Math.random() * 0.0008)
-    candles.push({ time: now - i * 60, open, high, low, close })
-    price = close
+export async function assertExecutableQuote(symbol: string): Promise<MarketQuote> {
+  const quote = await getSymbolQuote(symbol, { force: true })
+  if (!quote || quote.bid <= 0 || quote.ask <= 0) {
+    throw new Error(`No market quote available for ${symbol.toUpperCase()}`)
   }
-  return candles
+  if (!quote.tradable || quote.marketStatus !== 'open') {
+    throw new Error(
+      `Market for ${symbol.toUpperCase()} is ${quote.marketStatus}${quote.stale ? ' (stale quote)' : ''}. Trading is paused until a live quote is available.`
+    )
+  }
+  return quote
+}
+
+export type CatalogInfo = {
+  dataSource: 'live' | 'delayed' | 'unavailable'
+  dataSourceNote: string
+  provider: string
+  symbolsLive: number
+  symbolsTotal: number
+}
+
+export async function getMarketCatalog(): Promise<CatalogInfo> {
+  const snap = await getMarketSnapshot()
+  const live = snap.filter((s) => s.feedStatus === 'live').length
+  const delayed = snap.filter((s) => s.feedStatus === 'delayed' || s.feedStatus === 'closed').length
+  let dataSource: CatalogInfo['dataSource'] = 'unavailable'
+  if (live > 0) dataSource = 'live'
+  else if (delayed > 0) dataSource = 'delayed'
+
+  return {
+    dataSource,
+    dataSourceNote:
+      dataSource === 'live'
+        ? `Live MT5 feed via biquote (${live}/${snap.length} instruments streaming)`
+        : dataSource === 'delayed'
+          ? `Market closed or delayed — showing last official quotes (${delayed} instruments)`
+          : 'Market data feed unavailable',
+    provider: 'biquote/MT5',
+    symbolsLive: live,
+    symbolsTotal: snap.length,
+  }
+}
+
+/** Real OHLC candles from provider (no random generation). */
+export async function getCandles(symbol: string, bars = 120) {
+  const platform = symbol.toUpperCase()
+  const provider = providerSymbolFor(platform)
+  const count = Math.min(Math.max(bars, 10), 500)
+  try {
+    const res = await fetch(
+      `${BIQUOTE_BASE}/api/${encodeURIComponent(provider)}/ohlc?interval=1m&count=${count}`,
+      { cache: 'no-store', next: { revalidate: 0 } as any }
+    )
+    if (!res.ok) throw new Error(`ohlc ${res.status}`)
+    const data = await res.json()
+    const rows = Array.isArray(data?.bars) ? data.bars : Array.isArray(data) ? data : []
+    return rows
+      .map((b: any) => {
+        const t = Date.parse(b.openTime || b.time || b.timestamp)
+        return {
+          time: Math.floor((Number.isFinite(t) ? t : Date.now()) / 1000),
+          open: Number(b.open),
+          high: Number(b.high),
+          low: Number(b.low),
+          close: Number(b.close),
+        }
+      })
+      .filter((c: { open: number }) => Number.isFinite(c.open))
+      .sort((a: { time: number }, b: { time: number }) => a.time - b.time)
+  } catch (err) {
+    console.error('[market-prices] candles failed', provider, err)
+    // Fall back to last known mid as a flat series so the chart still renders
+    const q = await getSymbolQuote(platform)
+    const price = q?.price || 0
+    if (!price) return []
+    const now = Math.floor(Date.now() / 1000)
+    return Array.from({ length: Math.min(bars, 60) }, (_, i) => ({
+      time: now - (Math.min(bars, 60) - i) * 60,
+      open: price,
+      high: price,
+      low: price,
+      close: price,
+    }))
+  }
+}
+
+/** @deprecated use getCandles — kept for callers that still import generateCandles */
+export function generateCandles(symbol: string, bars = 120) {
+  // Sync stub — prefer await getCandles. Returns empty; route handler should call getCandles.
+  void symbol
+  void bars
+  return [] as Array<{ time: number; open: number; high: number; low: number; close: number }>
 }

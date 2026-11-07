@@ -192,7 +192,7 @@ export default function WalletPage({ appearance = 'terminal' }: { appearance?: P
           <div className={t.cardMuted}>
             <span className={t.label}>Margin level </span>
             <span className={`font-mono ${t.heading}`}>
-              {marginLevel > 0 ? `${marginLevel.toFixed(1)}%` : '—'}
+              {marginLevel > 0 ? `${marginLevel.toFixed(1)}%` : 'N/A'}
             </span>
           </div>
         </div>

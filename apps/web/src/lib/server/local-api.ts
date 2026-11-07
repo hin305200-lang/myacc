@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from './prisma'
 import { hashPassword, verifyPassword } from './password'
 import { signAccessToken, signRefreshToken, verifyAccessToken, type AuthPayload } from './auth-tokens'
-import { generateCandles, getMarketSnapshot } from './market-prices'
+import { getCandles, getMarketCatalog, getMarketSnapshot } from './market-prices'
 import { closePosition, placeMarketOrder, recalculateAccount } from './trading'
 
 type HandlerResult = NextResponse | null
@@ -205,9 +205,15 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
         equity: Number(user.equity),
         freeMargin: Number(user.freeMargin),
         margin: Number(user.margin),
-        marginLevel: Number(user.marginLevel),
+        marginLevel: metrics?.marginLevel ?? null,
         leverage: user.leverage || 10,
-        profit: metrics?.floatingProfit ?? 0,
+        profit: metrics?.netFloatingPl ?? 0,
+        floatingProfit: metrics?.floatingProfit ?? 0,
+        floatingLoss: metrics?.floatingLoss ?? 0,
+        netFloatingPl: metrics?.netFloatingPl ?? 0,
+        marginCallLevel: metrics?.marginCallLevel,
+        stopOutLevel: metrics?.stopOutLevel,
+        marginAlert: metrics?.marginAlert ?? { level: 'ok' },
       },
     })
   }
@@ -488,18 +494,20 @@ async function handleOrders(req: NextRequest, parts: string[]): Promise<HandlerR
 
 async function handleMarket(req: NextRequest, parts: string[]): Promise<HandlerResult> {
   if (req.method === 'GET' && parts[1] === 'symbols') {
-    const data = await getMarketSnapshot()
+    const data = await getMarketSnapshot(true)
     return json({ data })
   }
 
   if (req.method === 'GET' && parts[1] === 'catalog') {
-    const data = await getMarketSnapshot()
+    const data = await getMarketCatalog()
     return json({ data })
   }
 
   if (req.method === 'GET' && parts[1] === 'candles') {
     const symbol = (req.nextUrl.searchParams.get('symbol') || 'EURUSD').toUpperCase()
-    return json({ data: generateCandles(symbol) })
+    const bars = Number(req.nextUrl.searchParams.get('bars') || 120)
+    const data = await getCandles(symbol, bars)
+    return json({ data })
   }
 
   return null

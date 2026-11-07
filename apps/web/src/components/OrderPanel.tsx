@@ -11,6 +11,9 @@ interface MarketSymbol {
   spread: number
   changePercent: number
   icon?: string
+  tradable?: boolean
+  marketStatus?: 'open' | 'closed' | 'unavailable'
+  dataSource?: string
 }
 
 interface OrderPanelProps {
@@ -21,6 +24,7 @@ interface OrderPanelProps {
   tradeLoading?: boolean
   tradingLocked?: boolean
   tradingLockedReason?: string
+  leverage?: number
 }
 
 export default function OrderPanel({
@@ -31,15 +35,18 @@ export default function OrderPanel({
   tradeLoading = false,
   tradingLocked = false,
   tradingLockedReason,
+  leverage = 10,
 }: OrderPanelProps) {
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
   const [tradeSuccess, setTradeSuccess] = useState<'BUY' | 'SELL' | null>(null)
-  const buttonsDisabled = tradeLoading || tradingLocked
+  const marketClosed = Boolean(symbol && symbol.marketStatus && symbol.marketStatus !== 'open')
+  const buttonsDisabled = tradeLoading || tradingLocked || marketClosed || symbol?.tradable === false
   const estimatedMargin = useMemo(() => {
     if (!symbol) return 0
-    return (lotSize * contractSize(symbol.symbol) * symbol.ask) / 10
-  }, [symbol, lotSize])
+    const lev = Math.max(1, leverage)
+    return (lotSize * contractSize(symbol.symbol) * symbol.ask) / lev
+  }, [symbol, lotSize, leverage])
 
   if (!symbol) {
     return (
@@ -261,12 +268,17 @@ export default function OrderPanel({
           </div>
           <div className="flex justify-between items-center py-1">
             <span>Leverage:</span>
-            <span className="text-white font-semibold">1:10</span>
+            <span className="text-white font-semibold">1:{Math.max(1, leverage)}</span>
           </div>
           <div className="flex justify-between items-center py-1">
             <span>Est. margin:</span>
             <span className="text-white font-mono">${estimatedMargin.toFixed(2)}</span>
           </div>
+          {symbol.marketStatus && symbol.marketStatus !== 'open' && (
+            <div className="pt-1 text-[11px] text-amber-300">
+              Market {symbol.marketStatus} — last official BID/ASK shown. New orders paused.
+            </div>
+          )}
         </div>
       </div>
 
@@ -282,6 +294,11 @@ export default function OrderPanel({
       {tradingLocked && !tradeLoading && (
         <div className="absolute inset-x-0 bottom-0 z-40 border-t border-yellow-500/30 bg-yellow-500/15 px-3 py-2 text-center text-xs text-yellow-100">
           {tradingLockedReason || 'Waiting for admin approval before trading'}
+        </div>
+      )}
+      {!tradingLocked && marketClosed && !tradeLoading && (
+        <div className="absolute inset-x-0 bottom-0 z-40 border-t border-amber-500/30 bg-amber-500/15 px-3 py-2 text-center text-xs text-amber-100">
+          Market closed or quote stale — trading resumes when the live feed reopens
         </div>
       )}
     </div>

@@ -11,7 +11,7 @@ interface MarketWatchProps {
   symbols: MarketSymbol[]
   selectedSymbol: MarketSymbol | null
   onSelectSymbol: (symbol: MarketSymbol) => void
-  dataSource?: 'live' | 'simulated'
+  dataSource?: 'live' | 'delayed' | 'unavailable' | 'simulated'
   embedded?: boolean
 }
 
@@ -29,7 +29,7 @@ export default function MarketWatch({
   symbols,
   selectedSymbol,
   onSelectSymbol,
-  dataSource = 'simulated',
+  dataSource = 'delayed',
   embedded = false,
 }: MarketWatchProps) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -89,10 +89,12 @@ export default function MarketWatch({
           className={`text-[10px] px-2 py-0.5 rounded-full border ${
             dataSource === 'live'
               ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10'
-              : 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+              : dataSource === 'unavailable'
+                ? 'border-red-500/40 text-red-400 bg-red-500/10'
+                : 'border-amber-500/40 text-amber-400 bg-amber-500/10'
           }`}
         >
-          {dataSource === 'live' ? 'Live data' : 'Simulated'}
+          {dataSource === 'live' ? 'Live data' : dataSource === 'unavailable' ? 'Feed down' : 'Delayed / closed'}
         </span>
       </div>
 

@@ -19,12 +19,15 @@ const categoryFor = (symbol: string): MarketSymbol['category'] => {
   return 'stocks'
 }
 
-const withMeta = (row: Omit<MarketSymbol, 'category' | 'dataSource' | 'tradable' | 'marketStatus'>): MarketSymbol => ({
+const withMeta = (
+  row: Omit<MarketSymbol, 'category' | 'dataSource' | 'tradable' | 'marketStatus' | 'feedStatus'>
+): MarketSymbol => ({
   ...row,
   category: categoryFor(row.symbol),
-  dataSource: 'simulated',
-  tradable: true,
-  marketStatus: 'open',
+  dataSource: 'delayed',
+  feedStatus: 'unavailable',
+  tradable: false,
+  marketStatus: 'unavailable',
 })
 
 const fallbackSymbols: MarketSymbol[] = [
@@ -129,10 +132,21 @@ export type MarketSymbol = {
   spread: number
   changePercent: number
   category: 'forex' | 'crypto' | 'stocks' | 'commodities' | 'indices'
-  dataSource: 'live' | 'simulated'
+  dataSource: 'live' | 'delayed' | 'unavailable'
+  feedStatus?: 'live' | 'delayed' | 'closed' | 'unavailable'
   tradable: boolean
-  marketStatus: 'open'
+  marketStatus: 'open' | 'closed' | 'unavailable'
+  stale?: boolean
+  quoteAgeSeconds?: number | null
+  updatedAt?: string | null
+  providerSymbol?: string
+  source?: string
 }
+
+export type MarginAlert =
+  | { level: 'ok' }
+  | { level: 'margin_call'; marginLevel: number; threshold: number; message: string }
+  | { level: 'stop_out'; marginLevel: number; threshold: number; message: string }
 
 export type AccountSummary = {
   id?: string
@@ -143,14 +157,27 @@ export type AccountSummary = {
   equity: number
   freeMargin: number
   margin: number
-  marginLevel: number
+  /** null when no used margin — show N/A */
+  marginLevel: number | null
   leverage?: number
-  profit?: number // floating P/L
+  profit?: number // net floating P/L
+  floatingProfit?: number
+  floatingLoss?: number
+  netFloatingPl?: number
+  marginCallLevel?: number
+  stopOutLevel?: number
+  marginAlert?: MarginAlert
 }
 
 function normalizeAccountSummary(raw: unknown): AccountSummary | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const o = raw as Record<string, unknown>
+  const margin = Number(o.margin ?? 0)
+  const rawLevel = o.marginLevel
+  const marginLevel =
+    margin <= 0 || rawLevel == null || rawLevel === ''
+      ? null
+      : Number(rawLevel)
   return {
     id: o.id as string | undefined,
     fullName: o.fullName as string | undefined,
@@ -159,10 +186,16 @@ function normalizeAccountSummary(raw: unknown): AccountSummary | undefined {
     credit: Number(o.credit ?? 0),
     equity: Number(o.equity ?? 0),
     freeMargin: Number(o.freeMargin ?? 0),
-    margin: Number(o.margin ?? 0),
-    marginLevel: Number(o.marginLevel ?? 0),
+    margin,
+    marginLevel: marginLevel != null && Number.isFinite(marginLevel) ? marginLevel : null,
     leverage: o.leverage != null ? Number(o.leverage) : undefined,
-    profit: o.profit != null ? Number(o.profit) : 0,
+    profit: o.profit != null ? Number(o.profit) : Number(o.netFloatingPl ?? 0),
+    floatingProfit: o.floatingProfit != null ? Number(o.floatingProfit) : undefined,
+    floatingLoss: o.floatingLoss != null ? Number(o.floatingLoss) : undefined,
+    netFloatingPl: o.netFloatingPl != null ? Number(o.netFloatingPl) : undefined,
+    marginCallLevel: o.marginCallLevel != null ? Number(o.marginCallLevel) : undefined,
+    stopOutLevel: o.stopOutLevel != null ? Number(o.stopOutLevel) : undefined,
+    marginAlert: (o.marginAlert as MarginAlert) || { level: 'ok' },
   }
 }
 
@@ -179,13 +212,39 @@ export const useMarketCatalog = () => {
     queryKey: ['market-catalog'],
     queryFn: async () => {
       const response = await apiClient.get<{
-        data: { dataSource: 'live' | 'simulated'; dataSourceNote: string }
+        data: {
+          dataSource: 'live' | 'delayed' | 'unavailable'
+          dataSourceNote: string
+          provider?: string
+          symbolsLive?: number
+          symbolsTotal?: number
+        }
       }>('/market/catalog')
       return response.data
     },
-    staleTime: 60_000,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   })
   return data
+}
+
+function normalizeSymbol(s: MarketSymbol): MarketSymbol {
+  const bid = Number(s.bid)
+  const ask = Number(s.ask)
+  const dataSource = (s.dataSource as MarketSymbol['dataSource']) || 'unavailable'
+  return {
+    ...s,
+    changePercent: Number(s.changePercent),
+    bid,
+    ask,
+    price: Number(s.price) || (bid && ask ? (bid + ask) / 2 : 0),
+    spread: Number(s.spread ?? (ask && bid ? ask - bid : 0)),
+    category: s.category || categoryFor(s.symbol),
+    dataSource,
+    feedStatus: s.feedStatus || (dataSource === 'live' ? 'live' : dataSource === 'delayed' ? 'delayed' : 'unavailable'),
+    tradable: Boolean(s.tradable),
+    marketStatus: s.marketStatus || 'unavailable',
+  }
 }
 
 export const useMarketSymbols = () => {
@@ -193,15 +252,9 @@ export const useMarketSymbols = () => {
     queryKey: ['market-symbols'],
     queryFn: async () => {
       const response = await apiClient.get<{ data: MarketSymbol[] }>('/market/symbols')
-      return response.data.map((s) => ({
-        ...s,
-        changePercent: Number(s.changePercent),
-        bid: Number(s.bid),
-        ask: Number(s.ask),
-        price: Number(s.price),
-      }))
+      return response.data.map(normalizeSymbol)
     },
-    refetchInterval: 60_000,
+    refetchInterval: 5_000,
   })
 
   return {
@@ -314,10 +367,12 @@ export const usePriceSocket = () => {
 export const useSymbolsWithSocket = () => {
   const { symbols } = useMarketSymbols()
   const { snapshot } = usePriceSocket()
-
   const merged = useMemo(() => {
     const map = new Map(symbols.map((s) => [s.symbol, s]))
-    snapshot.forEach((s) => map.set(s.symbol, s))
+    snapshot.forEach((s) => {
+      const prev = map.get(s.symbol)
+      map.set(s.symbol, normalizeSymbol({ ...(prev || fallbackSymbols[0]), ...s, symbol: s.symbol }))
+    })
     return Array.from(map.values())
   }, [symbols, snapshot])
 
@@ -328,6 +383,7 @@ export const useAccountSummary = () => {
   const token = useAuthStore((state) => state.accessToken)
   const socket = useSharedSocket()
   const queryClient = useQueryClient()
+
   useEffect(() => {
     if (!socket) return
     const handler = (account: unknown) => {
@@ -349,7 +405,8 @@ export const useAccountSummary = () => {
       return normalizeAccountSummary(response.data)
     },
     enabled: !!token,
-    refetchInterval: 30_000,
+    // Backend recalculates floating P/L from live BID/ASK on every poll
+    refetchInterval: 2_000,
   })
   return data
 }

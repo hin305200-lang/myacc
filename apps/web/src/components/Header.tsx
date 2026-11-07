@@ -9,7 +9,7 @@ interface HeaderProps {
     equity: number
     freeMargin: number
     margin: number
-    marginLevel: number
+    marginLevel: number | null
     profit?: number
   }
   currentTime: Date
@@ -56,7 +56,14 @@ export default function Header({ account, currentTime, onOpenProfile, onOpenChat
         <StatItem label="EQUITY" value={account.equity} currency="USD" />
         <StatItem label="FREE MARGIN" value={account.freeMargin} currency="USD" />
         <StatItem label="MARGIN" value={account.margin} currency="USD" />
-        <StatItem label="MARGIN LEVEL" value={account.marginLevel} suffix="%" />
+        {account.marginLevel != null && account.marginLevel > 0 ? (
+          <StatItem label="MARGIN LEVEL" value={account.marginLevel} suffix="%" />
+        ) : (
+          <div className="text-center">
+            <div className="text-[10px] text-[#64748b] uppercase tracking-wide">MARGIN LEVEL</div>
+            <div className="text-sm font-semibold font-mono">N/A</div>
+          </div>
+        )}
         
         {/* Floating P/L */}
         <div className="px-4 py-2 bg-accent-cyan/10 border border-accent-cyan rounded-md">
