@@ -41,18 +41,16 @@ export default function AdminDashboard() {
     }
   }, [_hasHydrated, accessToken, user, router])
 
+  const isAdminReady = _hasHydrated && !!accessToken && user?.role === 'ADMIN'
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
       const res = await apiClient.get<{ data: AdminUser[] }>('/admin/users', accessToken ?? undefined)
       return res.data
     },
-    enabled: _hasHydrated && !!accessToken && user?.role === 'ADMIN',
+    enabled: isAdminReady,
   })
-
-  if (!_hasHydrated || !accessToken || user?.role !== 'ADMIN') {
-    return null
-  }
 
   const { data: deposits, refetch: refetchDeposits } = useQuery({
     queryKey: ['admin-deposits'],
@@ -60,7 +58,7 @@ export default function AdminDashboard() {
       const res = await apiClient.get<{ data: any[] }>('/admin/deposits', accessToken ?? undefined)
       return res.data
     },
-    enabled: !!accessToken && user?.role === 'ADMIN',
+    enabled: isAdminReady,
   })
 
   const { data: withdrawals, refetch: refetchWithdrawals } = useQuery({
@@ -69,7 +67,7 @@ export default function AdminDashboard() {
       const res = await apiClient.get<{ data: any[] }>('/admin/withdrawals', accessToken ?? undefined)
       return res.data
     },
-    enabled: !!accessToken && user?.role === 'ADMIN',
+    enabled: isAdminReady,
   })
 
   const handleGameOutcome = async () => {
@@ -85,6 +83,14 @@ export default function AdminDashboard() {
       '/admin/game/force-price',
       { symbol: priceSymbol, pips: pricePips },
       accessToken ?? undefined
+    )
+  }
+
+  if (!isAdminReady) {
+    return (
+      <div className="min-h-screen bg-bg-primary text-white flex items-center justify-center text-sm text-[#94a3b8]">
+        {_hasHydrated ? 'Admin access required…' : 'Loading…'}
+      </div>
     )
   }
 
