@@ -61,8 +61,17 @@ export function AuthModal({ open, onClose }: Props) {
           refreshToken: string
           user: UserPayload
         }>('/auth/login', { email: nextEmail, password: nextPassword })
-        setCredentials({ user: tokens.user as UserPayload, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken })
-        setStatus('Signed in successfully')
+        const role = String(tokens.user.role || 'USER').toUpperCase() as UserPayload['role']
+        setCredentials({
+          user: { ...tokens.user, role },
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        })
+        setStatus(
+          tokens.user.status && tokens.user.status !== 'ACTIVE'
+            ? 'Signed in. Waiting for admin approval before trading.'
+            : 'Signed in successfully'
+        )
         setTimeout(() => onClose(), 1000)
         return
       }
@@ -83,14 +92,18 @@ export function AuthModal({ open, onClose }: Props) {
       if (!response.accessToken || !response.user) {
         throw new Error('Invalid response from server. Please try again.')
       }
-      
+
+      const role = String(response.user.role || 'USER').toUpperCase() as UserPayload['role']
       setCredentials({ 
-        user: response.user as UserPayload, 
+        user: { ...response.user, role }, 
         accessToken: response.accessToken, 
         refreshToken: response.refreshToken 
       })
       
-      setStatus(response.message || 'Account created successfully! You can start trading now.')
+      setStatus(
+        response.message ||
+          'Account created. An administrator must approve your account before you can trade.'
+      )
       
       // Don't reload immediately - let user see success message
       setTimeout(() => {

@@ -117,6 +117,7 @@ export default function AdminDashboard() {
                   <th className="px-4 py-3 text-right">Free Margin</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -125,15 +126,17 @@ export default function AdminDashboard() {
                     <td className="px-4 py-3 font-medium">{u.fullName}</td>
                     <td className="px-4 py-3 text-[#94a3b8]">{u.email}</td>
                     <td className="px-4 py-3">{u.role}</td>
-                    <td className="px-4 py-3 text-right font-mono">${u.balance.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono">${u.equity.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono">${u.freeMargin.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">${Number(u.balance).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">${Number(u.equity).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">${Number(u.freeMargin).toFixed(2)}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${
                           u.status === 'ACTIVE'
                             ? 'bg-green-500/10 text-green-400'
-                            : 'bg-yellow-500/10 text-yellow-300'
+                            : u.status === 'SUSPENDED'
+                              ? 'bg-red-500/10 text-red-300'
+                              : 'bg-yellow-500/10 text-yellow-300'
                         }`}
                       >
                         {u.status}
@@ -141,6 +144,42 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-4 py-3 text-[#94a3b8] text-xs">
                       {new Date(u.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        {u.status !== 'ACTIVE' && u.role !== 'ADMIN' && (
+                          <button
+                            className="px-2 py-1 rounded bg-green-600/20 text-green-300 text-xs"
+                            onClick={() =>
+                              apiClient
+                                .post(
+                                  `/admin/users/${u.id}/status`,
+                                  { status: 'ACTIVE', startingBalance: 250 },
+                                  accessToken ?? undefined
+                                )
+                                .then(() => refetch())
+                            }
+                          >
+                            Approve trading
+                          </button>
+                        )}
+                        {u.status === 'ACTIVE' && u.role !== 'ADMIN' && (
+                          <button
+                            className="px-2 py-1 rounded bg-red-600/20 text-red-300 text-xs"
+                            onClick={() =>
+                              apiClient
+                                .post(
+                                  `/admin/users/${u.id}/status`,
+                                  { status: 'SUSPENDED' },
+                                  accessToken ?? undefined
+                                )
+                                .then(() => refetch())
+                            }
+                          >
+                            Suspend
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

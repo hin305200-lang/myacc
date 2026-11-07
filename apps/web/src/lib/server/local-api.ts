@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { prisma } from './prisma'
 import { hashPassword, verifyPassword } from './password'
 import { signAccessToken, signRefreshToken, verifyAccessToken, type AuthPayload } from './auth-tokens'
+import { generateCandles, getMarketSnapshot } from './market-prices'
+import { closePosition, placeMarketOrder, recalculateAccount } from './trading'
 
 type HandlerResult = NextResponse | null
 
@@ -47,7 +49,7 @@ async function requireUser(req: NextRequest): Promise<AuthPayload | NextResponse
   }
 }
 
-async function buildTokens(user: { id: string; email: string; role: string }) {
+async function buildTokens(user: { id: string; email: string; role: string; status?: string }) {
   const payload: AuthPayload = {
     userId: user.id,
     email: user.email,
@@ -57,7 +59,23 @@ async function buildTokens(user: { id: string; email: string; role: string }) {
     signAccessToken(payload),
     signRefreshToken(payload),
   ])
-  return { accessToken, refreshToken, user: payload }
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      ...payload,
+      status: user.status ?? 'PENDING',
+    },
+  }
+}
+
+async function requireAdmin(req: NextRequest): Promise<AuthPayload | NextResponse> {
+  const auth = await requireUser(req)
+  if (auth instanceof NextResponse) return auth
+  if (auth.role !== 'ADMIN') {
+    return json({ error: 'Admin access required' }, 403)
+  }
+  return auth
 }
 
 async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerResult> {
@@ -81,7 +99,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
     }
 
     const passwordHash = await hashPassword(parsed.data.password)
-    const startingBalance = 250
+    // New accounts stay PENDING until an admin approves trading.
     const user = await prisma.user.create({
       data: {
         fullName: parsed.data.fullName,
@@ -89,24 +107,13 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
         phoneNumber: parsed.data.phoneNumber?.trim() || null,
         passwordHash,
         role: 'USER',
-        status: 'ACTIVE',
-        balance: startingBalance,
-        equity: startingBalance,
+        status: 'PENDING',
+        balance: 0,
+        equity: 0,
         margin: 0,
-        freeMargin: startingBalance,
+        freeMargin: 0,
         marginLevel: 0,
         leverage: 100,
-      },
-    })
-
-    await prisma.transaction.create({
-      data: {
-        userId: user.id,
-        type: 'DEPOSIT',
-        amount: startingBalance,
-        balanceBefore: 0,
-        balanceAfter: startingBalance,
-        note: 'Initial account balance',
       },
     })
 
@@ -114,7 +121,8 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
     return json(
       {
         ...tokens,
-        message: 'Account created successfully. Welcome to TradeMarkets!',
+        message:
+          'Account created. An administrator must approve your account before you can open trades.',
       },
       201
     )
@@ -391,22 +399,275 @@ async function handleOrders(req: NextRequest, parts: string[]): Promise<HandlerR
   if (auth instanceof NextResponse) return auth
 
   if (req.method === 'GET' && parts.length === 1) {
+    await recalculateAccount(auth.userId)
     const positions = await prisma.position.findMany({
       where: { userId: auth.userId, status: 'OPEN' },
       orderBy: { openedAt: 'desc' },
     })
-    return json({ data: positions })
+    return json({
+      data: positions.map((pos) => ({
+        ...pos,
+        lotSize: Number(pos.lotSize),
+        openPrice: Number(pos.openPrice),
+        currentPrice: Number(pos.currentPrice),
+        stopLoss: pos.stopLoss ? Number(pos.stopLoss) : null,
+        takeProfit: pos.takeProfit ? Number(pos.takeProfit) : null,
+        marginUsed: Number(pos.marginUsed),
+        swap: Number(pos.swap),
+        commission: Number(pos.commission),
+        profit: Number(pos.profit),
+      })),
+    })
   }
 
-  // Full market-order engine still lives on apps/api; keep a clear response here.
-  if (req.method === 'POST') {
-    return json(
-      {
-        error:
-          'Live order execution requires the trading API worker. Account and auth are available now.',
+  if (req.method === 'POST' && parts.length === 1) {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({
+        symbol: z.string().min(1).max(20),
+        side: z.enum(['BUY', 'SELL']),
+        lotSize: z.number().positive().min(0.01).max(1000),
+        stopLoss: z.number().positive().optional(),
+        takeProfit: z.number().positive().optional(),
+      })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: parsed.error.flatten() }, 400)
+    try {
+      const position = await placeMarketOrder(auth.userId, parsed.data)
+      return json(
+        {
+          data: {
+            ...position,
+            lotSize: Number(position.lotSize),
+            openPrice: Number(position.openPrice),
+            currentPrice: Number(position.currentPrice),
+            marginUsed: Number(position.marginUsed),
+            commission: Number(position.commission),
+            profit: Number(position.profit),
+          },
+        },
+        201
+      )
+    } catch (error: any) {
+      return json({ error: error?.message || 'Order failed' }, 400)
+    }
+  }
+
+  if (req.method === 'POST' && parts[1] && parts[2] === 'close') {
+    try {
+      const result = await closePosition(parts[1], auth.userId)
+      return json(result)
+    } catch (error: any) {
+      return json({ error: error?.message || 'Close failed' }, 400)
+    }
+  }
+
+  return null
+}
+
+async function handleMarket(req: NextRequest, parts: string[]): Promise<HandlerResult> {
+  if (req.method === 'GET' && parts[1] === 'symbols') {
+    const data = await getMarketSnapshot()
+    return json({ data })
+  }
+
+  if (req.method === 'GET' && parts[1] === 'catalog') {
+    const data = await getMarketSnapshot()
+    return json({ data })
+  }
+
+  if (req.method === 'GET' && parts[1] === 'candles') {
+    const symbol = (req.nextUrl.searchParams.get('symbol') || 'EURUSD').toUpperCase()
+    return json({ data: generateCandles(symbol) })
+  }
+
+  return null
+}
+
+async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerResult> {
+  const auth = await requireAdmin(req)
+  if (auth instanceof NextResponse) return auth
+
+  if (req.method === 'GET' && parts[1] === 'users') {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        balance: true,
+        equity: true,
+        freeMargin: true,
+        status: true,
+        createdAt: true,
       },
-      503
-    )
+      orderBy: { createdAt: 'desc' },
+    })
+    return json({
+      data: users.map((u) => ({
+        ...u,
+        balance: Number(u.balance),
+        equity: Number(u.equity),
+        freeMargin: Number(u.freeMargin),
+      })),
+    })
+  }
+
+  // Approve / suspend trading for a user
+  if (req.method === 'POST' && parts[1] === 'users' && parts[2] && parts[3] === 'status') {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({
+        status: z.enum(['ACTIVE', 'PENDING', 'SUSPENDED']),
+        startingBalance: z.number().min(0).optional(),
+      })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid status' }, 400)
+
+    const user = await prisma.user.findUnique({ where: { id: parts[2] } })
+    if (!user) return json({ error: 'User not found' }, 404)
+
+    const becomingActive = parsed.data.status === 'ACTIVE' && user.status !== 'ACTIVE'
+    const credit = becomingActive ? parsed.data.startingBalance ?? 250 : 0
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        status: parsed.data.status,
+        ...(credit > 0
+          ? {
+              balance: Number(user.balance) + credit,
+              equity: Number(user.equity) + credit,
+              freeMargin: Number(user.freeMargin) + credit,
+            }
+          : {}),
+      },
+    })
+
+    if (credit > 0) {
+      await prisma.transaction.create({
+        data: {
+          userId: user.id,
+          type: 'DEPOSIT',
+          amount: credit,
+          balanceBefore: Number(user.balance),
+          balanceAfter: Number(user.balance) + credit,
+          note: 'Admin approved account — starting balance',
+        },
+      })
+    }
+
+    return json({
+      data: {
+        ...updated,
+        balance: Number(updated.balance),
+        equity: Number(updated.equity),
+        freeMargin: Number(updated.freeMargin),
+      },
+    })
+  }
+
+  if (req.method === 'GET' && parts[1] === 'deposits') {
+    const requests = await prisma.depositRequest.findMany({
+      include: { user: { select: { fullName: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+    return json({
+      data: requests.map((r) => ({ ...r, amount: Number(r.amount) })),
+    })
+  }
+
+  if (req.method === 'POST' && parts[1] === 'deposits' && parts[2] && parts[3] === 'resolve') {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({ action: z.enum(['APPROVE', 'REJECT']), note: z.string().optional() })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid action' }, 400)
+    const deposit = await prisma.depositRequest.findUnique({ where: { id: parts[2] } })
+    if (!deposit || deposit.status !== 'PENDING') {
+      return json({ error: 'Request not found' }, 404)
+    }
+    const status = parsed.data.action === 'APPROVE' ? 'APPROVED' : 'REJECTED'
+    await prisma.depositRequest.update({
+      where: { id: deposit.id },
+      data: { status, note: parsed.data.note, resolvedAt: new Date() },
+    })
+    if (status === 'APPROVED') {
+      const user = await prisma.user.findUnique({ where: { id: deposit.userId } })
+      if (user) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            balance: Number(user.balance) + Number(deposit.amount),
+            equity: Number(user.equity) + Number(deposit.amount),
+            freeMargin: Number(user.freeMargin) + Number(deposit.amount),
+          },
+        })
+        await prisma.transaction.create({
+          data: {
+            userId: user.id,
+            type: 'DEPOSIT',
+            amount: deposit.amount,
+            balanceBefore: user.balance,
+            balanceAfter: Number(user.balance) + Number(deposit.amount),
+            note: parsed.data.note,
+          },
+        })
+      }
+    }
+    return json({ success: true })
+  }
+
+  if (req.method === 'GET' && parts[1] === 'withdrawals') {
+    const requests = await prisma.withdrawalRequest.findMany({
+      include: { user: { select: { fullName: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+    return json({
+      data: requests.map((r) => ({ ...r, amount: Number(r.amount) })),
+    })
+  }
+
+  if (req.method === 'POST' && parts[1] === 'withdrawals' && parts[2] && parts[3] === 'resolve') {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({ action: z.enum(['APPROVE', 'REJECT']), note: z.string().optional() })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid action' }, 400)
+    const withdrawal = await prisma.withdrawalRequest.findUnique({ where: { id: parts[2] } })
+    if (!withdrawal || withdrawal.status !== 'PENDING') {
+      return json({ error: 'Request not found' }, 404)
+    }
+    const status = parsed.data.action === 'APPROVE' ? 'APPROVED' : 'REJECTED'
+    await prisma.withdrawalRequest.update({
+      where: { id: withdrawal.id },
+      data: { status, note: parsed.data.note, resolvedAt: new Date() },
+    })
+    if (status === 'APPROVED') {
+      const user = await prisma.user.findUnique({ where: { id: withdrawal.userId } })
+      if (user) {
+        const amount = Number(withdrawal.amount)
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            balance: Number(user.balance) - amount,
+            equity: Number(user.equity) - amount,
+            freeMargin: Number(user.freeMargin) - amount,
+          },
+        })
+        await prisma.transaction.create({
+          data: {
+            userId: user.id,
+            type: 'WITHDRAWAL',
+            amount: -amount,
+            balanceBefore: user.balance,
+            balanceAfter: Number(user.balance) - amount,
+            note: parsed.data.note,
+          },
+        })
+      }
+    }
+    return json({ success: true })
   }
 
   return null
@@ -441,6 +702,8 @@ export async function tryHandleLocalApi(
     if (root === 'auth') return await handleAuth(req, parts)
     if (root === 'account') return await handleAccount(req, parts)
     if (root === 'orders') return await handleOrders(req, parts)
+    if (root === 'market') return await handleMarket(req, parts)
+    if (root === 'admin') return await handleAdmin(req, parts)
   } catch (error: any) {
     console.error('[local-api]', error)
     return json({ error: error?.message || 'Internal server error' }, 500)

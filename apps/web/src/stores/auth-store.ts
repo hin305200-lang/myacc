@@ -7,6 +7,7 @@ export type UserPayload = {
   userId: string
   email: string
   role: 'USER' | 'ADMIN'
+  status?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | string
 }
 
 type AuthState = {
