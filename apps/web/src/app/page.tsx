@@ -189,8 +189,47 @@ export default function TradingPlatform() {
     })
   }, [openPositions, priceSnapshot])
 
+  // Keep account status fresh so trading stays locked until admin approval.
+  useEffect(() => {
+    if (!accessToken) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const me = await apiClient.get<{
+          user: { userId: string; email: string; role: string; status?: string }
+        }>('/auth/me', accessToken)
+        if (cancelled || !me?.user) return
+        const role = String(me.user.role || 'USER').toUpperCase() as 'USER' | 'ADMIN'
+        setCredentials({
+          user: {
+            userId: me.user.userId,
+            email: me.user.email,
+            role,
+            status: me.user.status,
+          },
+          accessToken,
+          refreshToken: useAuthStore.getState().refreshToken || accessToken,
+        })
+      } catch {
+        // ignore — user may still browse
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, setCredentials])
+
+  const canTrade = !!accessToken && user?.status === 'ACTIVE'
+
   const handleTrade = async (side: 'BUY' | 'SELL', stopLoss?: number, takeProfit?: number) => {
     if (!selectedSymbol || !accessToken || tradeLoading) {
+      return
+    }
+    if (!canTrade) {
+      setToast({
+        message: 'Your account is waiting for admin approval. You can message support in Chat.',
+        type: 'error',
+      })
       return
     }
     setTradeLoading(true)
@@ -232,6 +271,13 @@ export default function TradingPlatform() {
 
   const handleClosePosition = async (id: string) => {
     if (!accessToken) return
+    if (!canTrade) {
+      setToast({
+        message: 'Trading is locked until an admin approves your account.',
+        type: 'error',
+      })
+      return
+    }
     try {
       await apiClient.post(`/orders/${id}/close`, {}, accessToken)
       // Immediately refresh positions and account
@@ -318,9 +364,16 @@ export default function TradingPlatform() {
                   onLotSizeChange={setLotSize}
                   onTrade={handleTrade}
                   tradeLoading={tradeLoading}
+                  tradingLocked={!!accessToken && !canTrade}
+                  tradingLockedReason="Pending admin approval — use Chat to contact support"
                 />
               </div>
             </div>
+            {accessToken && !canTrade && (
+              <div className="border-t border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-center text-sm text-yellow-100">
+                Account pending admin approval — open Chat to message support. You cannot open or close trades until approved.
+              </div>
+            )}
           </>
         )
     }

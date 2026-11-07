@@ -18,6 +18,8 @@ interface OrderPanelProps {
   onLotSizeChange: (size: number) => void
   onTrade: (side: 'BUY' | 'SELL', stopLoss?: number, takeProfit?: number) => void
   tradeLoading?: boolean
+  tradingLocked?: boolean
+  tradingLockedReason?: string
 }
 
 export default function OrderPanel({
@@ -26,10 +28,13 @@ export default function OrderPanel({
   onLotSizeChange,
   onTrade,
   tradeLoading = false,
+  tradingLocked = false,
+  tradingLockedReason,
 }: OrderPanelProps) {
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
   const [tradeSuccess, setTradeSuccess] = useState<'BUY' | 'SELL' | null>(null)
+  const buttonsDisabled = tradeLoading || tradingLocked
 
   if (!symbol) {
     return (
@@ -105,13 +110,13 @@ export default function OrderPanel({
         {/* SELL Button */}
         <button
           onClick={() => handleTrade('SELL')}
-          disabled={tradeLoading}
+          disabled={buttonsDisabled}
           className={`w-full py-5 rounded-xl relative overflow-hidden transition-all transform ${
             tradeSuccess === 'SELL'
               ? 'scale-105 shadow-2xl shadow-[#ef4444]/50'
               : 'hover:scale-[1.02] hover:shadow-xl hover:shadow-[#ef4444]/30'
           } ${
-            tradeLoading 
+            buttonsDisabled 
               ? 'opacity-50 cursor-not-allowed' 
               : 'active:scale-[0.98]'
           } bg-gradient-to-br from-[#2a1b1b] via-[#1f1414] to-[#1a0f0f] border-2 border-[#ef4444]/50`}
@@ -159,13 +164,13 @@ export default function OrderPanel({
         {/* BUY Button */}
         <button
           onClick={() => handleTrade('BUY')}
-          disabled={tradeLoading}
+          disabled={buttonsDisabled}
           className={`w-full py-5 rounded-xl relative overflow-hidden transition-all transform ${
             tradeSuccess === 'BUY'
               ? 'scale-105 shadow-2xl shadow-[#10b981]/50'
               : 'hover:scale-[1.02] hover:shadow-xl hover:shadow-[#10b981]/30'
           } ${
-            tradeLoading 
+            buttonsDisabled 
               ? 'opacity-50 cursor-not-allowed' 
               : 'active:scale-[0.98]'
           } bg-gradient-to-br from-[#1b2a1f] via-[#152018] to-[#0f1812] border-2 border-[#10b981]/50`}
@@ -263,6 +268,11 @@ export default function OrderPanel({
             <div className="w-12 h-12 border-4 border-[#4f46e5] border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-sm text-white font-semibold">Executing Trade...</p>
           </div>
+        </div>
+      )}
+      {tradingLocked && !tradeLoading && (
+        <div className="absolute inset-x-0 bottom-0 z-40 border-t border-yellow-500/30 bg-yellow-500/15 px-3 py-2 text-center text-xs text-yellow-100">
+          {tradingLockedReason || 'Waiting for admin approval before trading'}
         </div>
       )}
     </div>

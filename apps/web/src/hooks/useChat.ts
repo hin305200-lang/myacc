@@ -14,6 +14,9 @@ export type ChatMessage = {
   content: string
   createdAt: string
   readAt?: string | null
+  userName?: string
+  userEmail?: string
+  userStatus?: string
 }
 
 export type ChatThreadPreview = ChatMessage

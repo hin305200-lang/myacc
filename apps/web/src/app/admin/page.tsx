@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/auth-store'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import ChatPage from '@/components/ChatPage'
 
 type AdminUser = {
   id: string
@@ -87,6 +88,9 @@ export default function AdminDashboard() {
           <div>
             <p className="text-sm text-[#94a3b8]">Administrator</p>
             <h1 className="text-2xl font-semibold">Control Center</h1>
+            <p className="text-xs text-[#94a3b8] mt-1">
+              Approve accounts here only. Trading stays locked until you approve.
+            </p>
           </div>
           <button
             onClick={() => refetch()}
@@ -99,8 +103,10 @@ export default function AdminDashboard() {
         <section className="bg-bg-panel border border-[#1e293b] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#1e293b] flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Users</h2>
-              <p className="text-xs text-[#94a3b8]">Approve students, adjust balances, monitor performance.</p>
+              <h2 className="text-lg font-semibold">Account approvals</h2>
+              <p className="text-xs text-[#94a3b8]">
+                New users are PENDING. Approve trading only from this page.
+              </p>
             </div>
             {isLoading && <span className="text-xs text-[#94a3b8]">Loading...</span>}
             {error && <span className="text-xs text-red-400">Failed to load</span>}
@@ -185,6 +191,18 @@ export default function AdminDashboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section className="bg-bg-panel border border-[#1e293b] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[#1e293b]">
+            <h2 className="text-lg font-semibold">User chat inbox</h2>
+            <p className="text-xs text-[#94a3b8]">
+              Every user (including pending accounts) can message you here. Reply from this panel.
+            </p>
+          </div>
+          <div className="h-[480px]">
+            <ChatPage />
           </div>
         </section>
 

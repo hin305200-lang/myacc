@@ -110,7 +110,7 @@ export default function ChatPage() {
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-sm font-semibold text-white flex items-center gap-2">
                         <User className="h-4 w-4" />
-                        {thread.userId.substring(0, 8)}
+                        {thread.userName || thread.userEmail || thread.userId.substring(0, 8)}
                       </div>
                       {unreadCount > 0 && (
                         <span className="bg-[#6366f1] text-white text-xs px-2 py-0.5 rounded-full">
@@ -118,8 +118,18 @@ export default function ChatPage() {
                         </span>
                       )}
                     </div>
+                    {thread.userEmail && (
+                      <div className="text-[11px] text-[#64748b] truncate mb-0.5">{thread.userEmail}</div>
+                    )}
                     <div className="text-xs text-[#94a3b8] truncate">{thread.content}</div>
-                    <div className="text-[10px] text-[#a69b8a] mt-1">{formatTime(thread.createdAt)}</div>
+                    <div className="text-[10px] text-[#a69b8a] mt-1 flex items-center justify-between gap-2">
+                      <span>{formatTime(thread.createdAt)}</span>
+                      {thread.userStatus && (
+                        <span className={thread.userStatus === 'ACTIVE' ? 'text-green-400' : 'text-yellow-300'}>
+                          {thread.userStatus}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 )
               })
@@ -133,10 +143,19 @@ export default function ChatPage() {
         <div className="p-4 border-b border-[#1e293b] bg-[#161b3d]">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-[#94a3b8]" />
-            {isAdmin ? `Chat with ${activeUserId?.substring(0, 8) || 'User'}` : 'Support Chat'}
+            {isAdmin
+              ? `Chat with ${
+                  threads.find((t) => t.userId === activeUserId)?.userName ||
+                  threads.find((t) => t.userId === activeUserId)?.userEmail ||
+                  activeUserId?.substring(0, 8) ||
+                  'User'
+                }`
+              : 'Support Chat'}
           </h2>
           <p className="text-xs text-[#94a3b8] mt-1">
-            {isAdmin ? 'Reply to user messages' : 'Send us a message and we\'ll get back to you'}
+            {isAdmin
+              ? 'All user messages arrive here — reply below'
+              : 'Message the admin anytime (even before account approval)'}
           </p>
         </div>
 

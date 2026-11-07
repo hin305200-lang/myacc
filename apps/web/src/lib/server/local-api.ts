@@ -153,7 +153,20 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
   if (req.method === 'GET' && action === 'me') {
     const auth = await requireUser(req)
     if (auth instanceof NextResponse) return auth
-    return json({ user: auth })
+    const dbUser = await prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { id: true, email: true, role: true, status: true, fullName: true },
+    })
+    if (!dbUser) return json({ error: 'Unauthorized' }, 401)
+    return json({
+      user: {
+        userId: dbUser.id,
+        email: dbUser.email,
+        role: dbUser.role,
+        status: dbUser.status,
+        fullName: dbUser.fullName,
+      },
+    })
   }
 
   return null
@@ -484,6 +497,132 @@ async function handleMarket(req: NextRequest, parts: string[]): Promise<HandlerR
   return null
 }
 
+async function handleChat(req: NextRequest, parts: string[]): Promise<HandlerResult> {
+  const auth = await requireUser(req)
+  if (auth instanceof NextResponse) return auth
+
+  const messageSelect = {
+    id: true,
+    userId: true,
+    adminId: true,
+    fromRole: true,
+    content: true,
+    createdAt: true,
+    readAt: true,
+  } as const
+
+  // GET /chat/threads — admin: latest per user; user: full own thread
+  if (req.method === 'GET' && parts[1] === 'threads') {
+    if (auth.role === 'ADMIN') {
+      const latest = await prisma.message.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: messageSelect,
+        take: 300,
+      })
+      const grouped = Object.values(
+        latest.reduce((acc: Record<string, (typeof latest)[number]>, msg) => {
+          if (!acc[msg.userId]) acc[msg.userId] = msg
+          return acc
+        }, {})
+      )
+      const userIds = grouped.map((m) => m.userId)
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, fullName: true, email: true, status: true },
+      })
+      const byId = Object.fromEntries(users.map((u) => [u.id, u]))
+      return json({
+        data: grouped.map((m) => ({
+          ...m,
+          userName: byId[m.userId]?.fullName ?? 'User',
+          userEmail: byId[m.userId]?.email ?? '',
+          userStatus: byId[m.userId]?.status ?? 'PENDING',
+        })),
+      })
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { userId: auth.userId },
+      orderBy: { createdAt: 'asc' },
+      select: messageSelect,
+    })
+    return json({ data: messages })
+  }
+
+  // POST /chat/send — any logged-in user (including PENDING) → admin inbox
+  if (req.method === 'POST' && parts[1] === 'send') {
+    const body = await readJsonBody(req)
+    const parsed = z.object({ content: z.string().min(1).max(2000) }).safeParse(body)
+    if (!parsed.success) return json({ error: 'Message required' }, 400)
+
+    const message = await prisma.message.create({
+      data: {
+        userId: auth.userId,
+        fromRole: 'USER',
+        content: parsed.data.content.trim(),
+      },
+      select: messageSelect,
+    })
+    return json({ data: message }, 201)
+  }
+
+  // GET /chat/thread/:userId — admin only
+  if (req.method === 'GET' && parts[1] === 'thread' && parts[2]) {
+    if (auth.role !== 'ADMIN') return json({ error: 'Admin only' }, 403)
+    const messages = await prisma.message.findMany({
+      where: { userId: parts[2] },
+      orderBy: { createdAt: 'asc' },
+      select: messageSelect,
+    })
+    return json({ data: messages })
+  }
+
+  // POST /chat/send-admin — admin reply into a user thread
+  if (req.method === 'POST' && parts[1] === 'send-admin') {
+    if (auth.role !== 'ADMIN') return json({ error: 'Admin only' }, 403)
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({ userId: z.string().min(1), content: z.string().min(1).max(2000) })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid message' }, 400)
+
+    const target = await prisma.user.findUnique({ where: { id: parsed.data.userId } })
+    if (!target) return json({ error: 'User not found' }, 404)
+
+    const message = await prisma.message.create({
+      data: {
+        userId: parsed.data.userId,
+        adminId: auth.userId,
+        fromRole: 'ADMIN',
+        content: parsed.data.content.trim(),
+      },
+      select: messageSelect,
+    })
+    return json({ data: message }, 201)
+  }
+
+  // POST /chat/read
+  if (req.method === 'POST' && parts[1] === 'read') {
+    const body = await readJsonBody(req)
+    const parsed = z.object({ userId: z.string().min(1) }).safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid request' }, 400)
+    if (auth.role !== 'ADMIN' && parsed.data.userId !== auth.userId) {
+      return json({ error: 'Forbidden' }, 403)
+    }
+    await prisma.message.updateMany({
+      where: {
+        userId: parsed.data.userId,
+        readAt: null,
+        ...(auth.role !== 'ADMIN' ? { fromRole: 'ADMIN' } : { fromRole: 'USER' }),
+      },
+      data: { readAt: new Date() },
+    })
+    return json({ success: true })
+  }
+
+  return null
+}
+
 async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerResult> {
   const auth = await requireAdmin(req)
   if (auth instanceof NextResponse) return auth
@@ -716,6 +855,7 @@ export async function tryHandleLocalApi(
     if (root === 'orders') return await handleOrders(req, parts)
     if (root === 'market') return await handleMarket(req, parts)
     if (root === 'admin') return await handleAdmin(req, parts)
+    if (root === 'chat') return await handleChat(req, parts)
   } catch (error: any) {
     console.error('[local-api]', error)
     return json({ error: error?.message || 'Internal server error' }, 500)
