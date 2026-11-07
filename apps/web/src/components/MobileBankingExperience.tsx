@@ -24,6 +24,8 @@ import SettingsPage from './SettingsPage'
 import NotificationsPage from './NotificationsPage'
 import DocumentsPage from './DocumentsPage'
 import ChatPage from './ChatPage'
+import TasksPage from './TasksPage'
+import InfoPage from './InfoPage'
 import { formatMarginLevelIfAuth, formatPlIfAuth } from '@/lib/account-display'
 import { useAuthStore } from '@/stores/auth-store'
 import { apiClient } from '@/lib/api-client'
@@ -40,6 +42,8 @@ export type MobileBankTab =
   | 'notifications'
   | 'documents'
   | 'chat'
+  | 'tasks'
+  | 'info'
   | 'chart'
 
 interface AccountSummary {
@@ -435,30 +439,50 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
         )}
 
         {tab === 'settings' && (
-          <SubpageShell title="Settings">
+          <div className="h-full overflow-hidden pb-20">
             <SettingsPage />
-          </SubpageShell>
+          </div>
         )}
         {tab === 'notifications' && (
-          <SubpageShell title="Notifications">
+          <div className="h-full overflow-hidden pb-20">
             <NotificationsPage />
-          </SubpageShell>
+          </div>
         )}
         {tab === 'documents' && (
-          <SubpageShell title="Documents">
+          <div className="h-full overflow-hidden pb-20">
             <DocumentsPage />
-          </SubpageShell>
+          </div>
         )}
         {tab === 'chat' && (
-          <SubpageShell title="Support">
+          <div className="h-full overflow-hidden pb-20">
             <ChatPage />
-          </SubpageShell>
+          </div>
+        )}
+        {tab === 'tasks' && (
+          <div className="h-full overflow-hidden pb-20">
+            <TasksPage
+              onNavigate={(page) => {
+                if (page === 'reports') go('documents')
+                else if (page === 'chart') go('trade')
+                else go(page as MobileBankTab)
+              }}
+            />
+          </div>
+        )}
+        {tab === 'info' && (
+          <div className="h-full overflow-hidden pb-20">
+            <InfoPage
+              onNavigate={(page) => {
+                if (page === 'reports') go('documents')
+                else if (page === 'chart') go('trade')
+                else go(page as MobileBankTab)
+              }}
+            />
+          </div>
         )}
         {tab === 'profile' && (
-          <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
-            <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#0a0e27]">
-              <ProfilePage appearance="terminal" compact />
-            </div>
+          <div className="h-full overflow-hidden pb-20">
+            <ProfilePage appearance="terminal" />
           </div>
         )}
       </main>
@@ -511,9 +535,11 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                 { id: 'history' as const, label: 'History' },
                 { id: 'wallet' as const, label: 'Deposit / Wallet' },
                 { id: 'chat' as const, label: 'Support chat' },
+                { id: 'tasks' as const, label: 'Tasks' },
+                { id: 'info' as const, label: 'Info' },
                 { id: 'settings' as const, label: 'Settings' },
                 { id: 'notifications' as const, label: 'Notifications' },
-                { id: 'documents' as const, label: 'Documents' },
+                { id: 'documents' as const, label: 'KYC / Documents' },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -745,6 +771,8 @@ function ProfileTradingMenu({
       </div>
       <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#111538]">
         <MenuRow label="Deposit / Wallet" onClick={() => onNavigate('wallet')} />
+        <MenuRow label="Tasks" onClick={() => onNavigate('tasks')} />
+        <MenuRow label="Info" onClick={() => onNavigate('info')} />
         <MenuRow label="Settings" onClick={() => onNavigate('settings')} />
         <MenuRow label="Notifications" onClick={() => onNavigate('notifications')} />
         <MenuRow label="KYC / Documents" onClick={() => onNavigate('documents')} />

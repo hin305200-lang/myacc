@@ -79,13 +79,17 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-[#0a0e27]">
+    <div className="relative h-full flex flex-col lg:flex-row overflow-hidden bg-[#070b1a]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.14),transparent_40%),radial-gradient(ellipse_at_bottom_left,rgba(34,211,238,0.08),transparent_35%)]"
+      />
       {/* Sidebar for Admin */}
       {isAdmin && (
-        <div className="w-full lg:w-64 bg-[#161b3d] border-b lg:border-b-0 lg:border-r border-[#1e293b] flex flex-col max-h-[200px] lg:max-h-none">
-          <div className="p-4 border-b border-[#1e293b]">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[#94a3b8]" />
+        <div className="relative z-10 w-full lg:w-72 bg-[#121833]/90 border-b lg:border-b-0 lg:border-r border-white/[0.08] flex flex-col max-h-[200px] lg:max-h-none backdrop-blur-sm">
+          <div className="p-4 border-b border-white/[0.08]">
+            <h2 className="text-sm font-semibold text-white flex items-center gap-2 tracking-wide">
+              <Shield className="h-4 w-4 text-cyan-300" />
               Conversations
             </h2>
           </div>
@@ -103,17 +107,17 @@ export default function ChatPage() {
                   <button
                     key={thread.id}
                     onClick={() => setActiveUserId(thread.userId)}
-                    className={`w-full text-left px-4 py-3 border-b border-[#1e293b] hover:bg-[#161b3d]/50 transition ${
-                      activeUserId === thread.userId ? 'bg-[#161b3d] border-l-4 border-l-[#94a3b8]' : ''
+                    className={`w-full text-left px-4 py-3 border-b border-white/[0.06] hover:bg-white/[0.04] transition ${
+                      activeUserId === thread.userId ? 'bg-cyan-500/10 border-l-2 border-l-cyan-400' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-sm font-semibold text-white flex items-center gap-2">
-                        <User className="h-4 w-4" />
+                        <User className="h-4 w-4 text-slate-400" />
                         {thread.userName || thread.userEmail || thread.userId.substring(0, 8)}
                       </div>
                       {unreadCount > 0 && (
-                        <span className="bg-[#6366f1] text-white text-xs px-2 py-0.5 rounded-full">
+                        <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-xs px-2 py-0.5 rounded-full">
                           {unreadCount}
                         </span>
                       )}
@@ -139,10 +143,13 @@ export default function ChatPage() {
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        <div className="p-4 border-b border-[#1e293b] bg-[#161b3d]">
+      <div className="relative z-10 flex-1 flex flex-col min-h-0">
+        <div className="p-4 border-b border-white/[0.08] bg-[#121833]/80 backdrop-blur-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-300/90 mb-2">
+            <MessageSquare className="h-3 w-3" />
+            Support
+          </div>
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-[#94a3b8]" />
             {isAdmin
               ? `Chat with ${
                   threads.find((t) => t.userId === activeUserId)?.userName ||
@@ -150,9 +157,9 @@ export default function ChatPage() {
                   activeUserId?.substring(0, 8) ||
                   'User'
                 }`
-              : 'Support Chat'}
+              : 'Support chat'}
           </h2>
-          <p className="text-xs text-[#94a3b8] mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             {isAdmin
               ? 'All user messages arrive here — reply below'
               : 'Message the admin anytime (even before account approval)'}
@@ -160,13 +167,13 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0a0e27]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messagesLoading ? (
-            <div className="text-center text-[#94a3b8] py-8">Loading messages...</div>
+            <div className="text-center text-slate-400 py-8">Loading messages...</div>
           ) : messages.length === 0 ? (
             <div className="text-center py-12">
-              <MessageSquare className="h-12 w-12 text-[#1e293b] mx-auto mb-4" />
-              <p className="text-[#94a3b8]">No messages yet. Start the conversation!</p>
+              <MessageSquare className="h-12 w-12 text-slate-700 mx-auto mb-4" />
+              <p className="text-slate-400">No messages yet. Start the conversation!</p>
             </div>
           ) : (
             messages.map((msg) => {
@@ -178,10 +185,10 @@ export default function ChatPage() {
                 className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                  className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-lg ${
                     mine
-                      ? 'bg-[#6366f1] text-white'
-                      : 'bg-[#161b3d] border border-[#1e293b] text-white'
+                      ? 'bg-gradient-to-br from-indigo-500 to-cyan-500 text-white'
+                      : 'bg-[#161b3d]/90 border border-white/10 text-white'
                   } ${msg.pending ? 'opacity-70' : ''}`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -207,10 +214,10 @@ export default function ChatPage() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 border-t border-[#1e293b] bg-[#161b3d]">
+        <div className="p-4 border-t border-white/[0.08] bg-[#121833]/90 backdrop-blur-sm">
           <form onSubmit={handleSend} className="flex gap-2">
             <textarea
-              className="flex-1 px-4 py-2 border border-[#1e293b] rounded-lg bg-[#0d1230] text-white focus:outline-none focus:ring-2 focus:ring-[#94a3b8] resize-none"
+              className="flex-1 px-4 py-2.5 border border-white/10 rounded-xl bg-black/20 text-white focus:outline-none focus:border-cyan-400/40 resize-none"
               rows={2}
               placeholder="Type your message..."
               value={content}
@@ -225,7 +232,7 @@ export default function ChatPage() {
             <button
               type="submit"
               disabled={sending || !content.trim() || (isAdmin && !activeUserId)}
-              className="px-6 py-2 bg-[#6366f1] text-white rounded-lg hover:bg-[#4f46e5] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 text-white hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-semibold"
             >
               <Send className="h-4 w-4" />
               {sending ? 'Sending...' : 'Send'}

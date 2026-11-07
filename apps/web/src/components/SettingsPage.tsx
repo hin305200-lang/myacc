@@ -1,130 +1,184 @@
 'use client'
 
-import { Settings, User, Bell, Shield, Globe, Moon, Sun } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Settings, Bell, Shield, Monitor, Save, Check } from 'lucide-react'
+import AccountPageShell, { AccountPanel } from '@/components/AccountPageShell'
+import { useAuthStore } from '@/stores/auth-store'
+
+const STORAGE_KEY = 'nexus-settings-v1'
+
+type Prefs = {
+  emailAlerts: boolean
+  pushAlerts: boolean
+  tradeSounds: boolean
+  compactTickets: boolean
+  confirmClose: boolean
+}
+
+const DEFAULTS: Prefs = {
+  emailAlerts: true,
+  pushAlerts: true,
+  tradeSounds: false,
+  compactTickets: false,
+  confirmClose: true,
+}
+
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+        checked ? 'bg-cyan-500' : 'bg-white/15'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
+          checked ? 'translate-x-5' : ''
+        }`}
+      />
+    </button>
+  )
+}
+
+function Row({
+  title,
+  detail,
+  checked,
+  onChange,
+}: {
+  title: string
+  detail: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-white">{title}</div>
+        <div className="text-xs text-slate-400">{detail}</div>
+      </div>
+      <Toggle checked={checked} onChange={onChange} />
+    </div>
+  )
+}
 
 export default function SettingsPage() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
-  const [notifications, setNotifications] = useState({
-    email: true,
-    push: false,
-    sms: false,
-  })
+  const user = useAuthStore((s) => s.user)
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULTS)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) setPrefs({ ...DEFAULTS, ...JSON.parse(raw) })
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const update = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
+    setPrefs((p) => ({ ...p, [key]: value }))
+    setSaved(false)
+  }
+
+  const save = () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0a0e27] p-3 sm:p-4 lg:p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#94a3b8] mb-2 flex items-center gap-2 sm:gap-3">
-            <Settings className="h-6 w-6 sm:h-8 sm:w-8" />
-            Settings
-          </h1>
-          <p className="text-white">Manage your account settings and preferences</p>
+    <AccountPageShell
+      icon={Settings}
+      eyebrow="Preferences"
+      title="Settings"
+      subtitle="Control alerts, confirmations, and terminal behavior for this device."
+      actions={
+        <button
+          type="button"
+          onClick={save}
+          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-cyan-500/20"
+        >
+          {saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+          {saved ? 'Saved' : 'Save preferences'}
+        </button>
+      }
+    >
+      <AccountPanel glow>
+        <div className="mb-1 flex items-center gap-2">
+          <Shield className="h-4 w-4 text-violet-300" />
+          <h2 className="text-sm font-semibold text-white">Account</h2>
         </div>
-
-        <div className="space-y-6">
-          {/* Account Settings */}
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-3 sm:p-4 lg:p-6">
-            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <User className="h-5 w-5 text-[#94a3b8]" />
-              Account Settings
-            </h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-white">Two-Factor Authentication</div>
-                  <div className="text-sm text-[#94a3b8]">Add an extra layer of security</div>
-                </div>
-                <button className="px-4 py-2 bg-[#6366f1] text-white rounded-lg hover:bg-[#4f46e5] transition text-sm">
-                  Enable
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Notifications */}
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-3 sm:p-4 lg:p-6">
-            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <Bell className="h-5 w-5 text-[#94a3b8]" />
-              Notifications
-            </h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-white">Email Notifications</div>
-                  <div className="text-sm text-[#94a3b8]">Receive updates via email</div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={notifications.email}
-                    onChange={(e) => setNotifications({ ...notifications, email: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#94a3b8]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#0d1230] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6366f1]"></div>
-                </label>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-white">Push Notifications</div>
-                  <div className="text-sm text-[#94a3b8]">Receive browser notifications</div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={notifications.push}
-                    onChange={(e) => setNotifications({ ...notifications, push: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#94a3b8]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#0d1230] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6366f1]"></div>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Privacy & Security */}
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-3 sm:p-4 lg:p-6">
-            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[#94a3b8]" />
-              Privacy & Security
-            </h2>
-            <div className="space-y-4">
-              <button className="w-full text-left px-4 py-3 bg-[#0d1230] border border-[#1e293b] rounded-lg hover:bg-[#161b3d] transition text-white">
-                Change Password
-              </button>
-              <button className="w-full text-left px-4 py-3 bg-[#0d1230] border border-[#1e293b] rounded-lg hover:bg-[#161b3d] transition text-white">
-                Privacy Settings
-              </button>
-            </div>
-          </div>
-
-          {/* Appearance */}
-          <div className="bg-[#161b3d] border border-[#1e293b] rounded-lg p-3 sm:p-4 lg:p-6">
-            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              {theme === 'light' ? <Sun className="h-5 w-5 text-[#94a3b8]" /> : <Moon className="h-5 w-5 text-[#94a3b8]" />}
-              Appearance
-            </h2>
-            <div className="flex gap-4">
-              <button
-                onClick={() => setTheme('light')}
-                className={`px-4 py-2 rounded-lg transition ${
-                  theme === 'light' ? 'bg-[#6366f1] text-white' : 'bg-[#0d1230] border border-[#1e293b] text-white'
-                }`}
-              >
-                Light
-              </button>
-              <button
-                onClick={() => setTheme('dark')}
-                className={`px-4 py-2 rounded-lg transition ${
-                  theme === 'dark' ? 'bg-[#6366f1] text-white' : 'bg-[#0d1230] border border-[#1e293b] text-white'
-                }`}
-              >
-                Dark
-              </button>
-            </div>
-          </div>
+        <p className="text-xs text-slate-400 mb-3">
+          Signed in as <span className="text-slate-200">{user?.email || 'guest'}</span>
+          {user?.status ? (
+            <>
+              {' '}
+              · status <span className="font-mono text-cyan-200">{user.status}</span>
+            </>
+          ) : null}
+        </p>
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-xs text-slate-400">
+          Password resets and 2FA are handled by support after KYC. Use Chat if you need an account security change.
         </div>
-      </div>
-    </div>
+      </AccountPanel>
+
+      <AccountPanel>
+        <div className="mb-1 flex items-center gap-2">
+          <Bell className="h-4 w-4 text-cyan-300" />
+          <h2 className="text-sm font-semibold text-white">Alerts</h2>
+        </div>
+        <div className="divide-y divide-white/[0.06]">
+          <Row
+            title="Email alerts"
+            detail="Deposits, withdrawals, and KYC status updates"
+            checked={prefs.emailAlerts}
+            onChange={(v) => update('emailAlerts', v)}
+          />
+          <Row
+            title="Push / browser alerts"
+            detail="Margin warnings and fill confirmations in-session"
+            checked={prefs.pushAlerts}
+            onChange={(v) => update('pushAlerts', v)}
+          />
+          <Row
+            title="Trade sounds"
+            detail="Audio cue when an order fills"
+            checked={prefs.tradeSounds}
+            onChange={(v) => update('tradeSounds', v)}
+          />
+        </div>
+      </AccountPanel>
+
+      <AccountPanel>
+        <div className="mb-1 flex items-center gap-2">
+          <Monitor className="h-4 w-4 text-emerald-300" />
+          <h2 className="text-sm font-semibold text-white">Terminal</h2>
+        </div>
+        <div className="divide-y divide-white/[0.06]">
+          <Row
+            title="Compact order ticket"
+            detail="Prefer denser lot / SL / TP controls"
+            checked={prefs.compactTickets}
+            onChange={(v) => update('compactTickets', v)}
+          />
+          <Row
+            title="Confirm before close"
+            detail="Ask before closing an open position"
+            checked={prefs.confirmClose}
+            onChange={(v) => update('confirmClose', v)}
+          />
+        </div>
+      </AccountPanel>
+    </AccountPageShell>
   )
 }

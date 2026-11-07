@@ -13,6 +13,8 @@ import NotificationsPage from '@/components/NotificationsPage'
 import DocumentsPage from '@/components/DocumentsPage'
 import ProfilePage from '@/components/ProfilePage'
 import ChatPage from '@/components/ChatPage'
+import TasksPage from '@/components/TasksPage'
+import InfoPage from '@/components/InfoPage'
 import { AuthModal } from '@/components/AuthModal'
 import { Toast } from '@/components/Toast'
 import { useAuthStore, type UserPayload } from '@/stores/auth-store'
@@ -495,6 +497,10 @@ export default function TradingPlatform() {
         return <DocumentsPage />
       case 'chat':
         return <ChatPage />
+      case 'tasks':
+        return <TasksPage onNavigate={setActivePage} />
+      case 'info':
+        return <InfoPage onNavigate={setActivePage} />
       case 'chart':
       default:
         return (
