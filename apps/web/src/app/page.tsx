@@ -498,7 +498,7 @@ export default function TradingPlatform() {
             {/* Desktop ModMount layout: Watch LEFT · Chart CENTER · Order RIGHT · Positions BOTTOM */}
             <div className="hidden lg:flex flex-1 overflow-hidden bg-[#0a0e27] min-h-0">
               {/* Left — Market Watch (full height) */}
-              <div className="w-[270px] xl:w-[300px] flex-shrink-0 h-full">
+              <div className="w-[240px] xl:w-[260px] flex-shrink-0 h-full min-w-0">
                 <MarketWatch
                   symbols={symbols}
                   selectedSymbol={selectedSymbol}
@@ -536,8 +536,8 @@ export default function TradingPlatform() {
                     </div>
                   </div>
 
-                  {/* Right — order ticket (kept, placed like a dealing panel) */}
-                  <div className="w-[300px] xl:w-[320px] flex-shrink-0 border-l border-[#2d3142] bg-[#1a1d2e] overflow-visible">
+                  {/* Right — order ticket (narrow so +/− fits on screen) */}
+                  <div className="w-[200px] xl:w-[220px] min-w-0 flex-shrink-0 border-l border-[#2d3142] bg-[#1a1d2e] overflow-hidden">
                     <OrderPanel
                       symbol={selectedSymbol ?? null}
                       lotSize={lotSize}
