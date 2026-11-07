@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "npm ci",
-  "buildCommand": "npm run build",
+  "installCommand": "npm install --no-workspaces --dangerously-allow-all-scripts",
+  "buildCommand": "npx prisma generate && next build --no-lint",
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26"
