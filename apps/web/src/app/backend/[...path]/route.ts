@@ -33,11 +33,6 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]) {
       {
         error:
           'Trading API is not configured. Set DATABASE_URL and JWT_SECRET on Vercel (auth/account), or deploy apps/api and set API_PROXY_TARGET.',
-        env: {
-          hasDatabaseUrl: Boolean(process.env.DATABASE_URL?.trim()),
-          hasDirectUrl: Boolean(process.env.DIRECT_URL?.trim()),
-          hasJwtSecret: Boolean(process.env.JWT_SECRET?.trim()),
-        },
       },
       { status: 503 }
     )
