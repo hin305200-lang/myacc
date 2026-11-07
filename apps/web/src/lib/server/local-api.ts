@@ -763,8 +763,6 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
           where: { id: user.id },
           data: {
             balance: Number(user.balance) + Number(deposit.amount),
-            equity: Number(user.equity) + Number(deposit.amount),
-            freeMargin: Number(user.freeMargin) + Number(deposit.amount),
           },
         })
         await prisma.transaction.create({
@@ -777,6 +775,7 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
             note: parsed.data.note,
           },
         })
+        await recalculateAccount(user.id)
       }
     }
     return json({ success: true })
@@ -815,8 +814,6 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
           where: { id: user.id },
           data: {
             balance: Number(user.balance) - amount,
-            equity: Number(user.equity) - amount,
-            freeMargin: Number(user.freeMargin) - amount,
           },
         })
         await prisma.transaction.create({
@@ -829,6 +826,7 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
             note: parsed.data.note,
           },
         })
+        await recalculateAccount(user.id)
       }
     }
     return json({ success: true })
