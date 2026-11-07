@@ -22,7 +22,7 @@ model User {
   margin          Decimal         @default(0)
   freeMargin      Decimal         @default(0)
   marginLevel      Decimal         @default(0)
-  leverage        Int             @default(100)
+  leverage        Int             @default(10)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   positions       Position[]

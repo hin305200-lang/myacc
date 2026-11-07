@@ -188,7 +188,8 @@ export class TradingEngineService extends EventEmitter {
 
   calculateMargin({ lotSize, price, leverage, symbol }: { lotSize: number; price: number; leverage: number; symbol: string }) {
     const contract = this.contractSize(symbol)
-    return (lotSize * contract * price) / leverage
+    const lev = Math.max(1, leverage || 10)
+    return (lotSize * contract * price) / lev
   }
 
   calculateProfit(position: { side: TradeSide; lotSize: number; openPrice: number; currentPrice: number; symbol: string }) {

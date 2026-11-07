@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { TrendingUp, TrendingDown, Zap, Shield } from 'lucide-react'
+import { contractSize } from '@/lib/contract-sizes'
 
 interface MarketSymbol {
   symbol: string
@@ -35,6 +36,10 @@ export default function OrderPanel({
   const [takeProfit, setTakeProfit] = useState('')
   const [tradeSuccess, setTradeSuccess] = useState<'BUY' | 'SELL' | null>(null)
   const buttonsDisabled = tradeLoading || tradingLocked
+  const estimatedMargin = useMemo(() => {
+    if (!symbol) return 0
+    return (lotSize * contractSize(symbol.symbol) * symbol.ask) / 10
+  }, [symbol, lotSize])
 
   if (!symbol) {
     return (
@@ -256,7 +261,11 @@ export default function OrderPanel({
           </div>
           <div className="flex justify-between items-center py-1">
             <span>Leverage:</span>
-            <span className="text-white font-semibold">1:200</span>
+            <span className="text-white font-semibold">1:10</span>
+          </div>
+          <div className="flex justify-between items-center py-1">
+            <span>Est. margin:</span>
+            <span className="text-white font-mono">${estimatedMargin.toFixed(2)}</span>
           </div>
         </div>
       </div>

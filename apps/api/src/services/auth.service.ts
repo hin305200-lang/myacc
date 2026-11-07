@@ -14,8 +14,7 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(input.password)
     
-    // Initialize new user with starting balance and proper account setup
-    const startingBalance = 250
+    // New accounts stay at $0 / PENDING until admin approval (then $350 @ 1:10).
     const user = await prisma.user.create({
       data: {
         fullName: input.fullName,
@@ -23,25 +22,13 @@ export class AuthService {
         phoneNumber: input.phoneNumber?.trim() || null,
         passwordHash,
         role: 'USER',
-        status: 'ACTIVE',
-        balance: startingBalance,
-        equity: startingBalance,
+        status: 'PENDING',
+        balance: 0,
+        equity: 0,
         margin: 0,
-        freeMargin: startingBalance,
+        freeMargin: 0,
         marginLevel: 0,
-        leverage: 100, // Default leverage 1:100
-      },
-    })
-
-    // Create a welcome transaction record
-    await prisma.transaction.create({
-      data: {
-        userId: user.id,
-        type: 'DEPOSIT',
-        amount: startingBalance,
-        balanceBefore: 0,
-        balanceAfter: startingBalance,
-        note: 'Initial account balance',
+        leverage: 10,
       },
     })
 

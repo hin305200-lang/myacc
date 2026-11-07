@@ -113,7 +113,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
         margin: 0,
         freeMargin: 0,
         marginLevel: 0,
-        leverage: 100,
+        leverage: 10,
       },
     })
 
@@ -180,6 +180,7 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
   const detail = parts[2]
 
   if (req.method === 'GET' && section === 'summary') {
+    const metrics = await recalculateAccount(userId)
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -202,6 +203,8 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
         freeMargin: Number(user.freeMargin),
         margin: Number(user.margin),
         marginLevel: Number(user.marginLevel),
+        leverage: user.leverage || 10,
+        profit: metrics?.floatingProfit ?? 0,
       },
     })
   }
@@ -673,11 +676,14 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
       where: { id: user.id },
       data: {
         status: parsed.data.status,
+        leverage: 10,
         ...(credit > 0
           ? {
               balance: Number(user.balance) + credit,
-              equity: Number(user.equity) + credit,
-              freeMargin: Number(user.freeMargin) + credit,
+              equity: Number(user.balance) + credit,
+              freeMargin: Number(user.balance) + credit,
+              margin: 0,
+              marginLevel: 0,
             }
           : {}),
       },

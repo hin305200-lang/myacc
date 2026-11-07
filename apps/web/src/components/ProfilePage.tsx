@@ -194,7 +194,7 @@ export default function ProfilePage({
                   </div>
                   <div>
                     <div className={`${t.label} mb-1`}>Leverage</div>
-                    <div className={t.heading}>1:{profile.leverage || 100}</div>
+                    <div className={t.heading}>1:{profile.leverage || 10}</div>
                   </div>
                 </div>
               </div>

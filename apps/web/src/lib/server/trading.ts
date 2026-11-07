@@ -1,6 +1,9 @@
 import { prisma } from './prisma'
 import { getSymbolQuote, isTradableSymbol } from './market-prices'
 
+/** Platform leverage: 1:10 */
+export const DEFAULT_LEVERAGE = 10
+
 const CONTRACT_SIZES: Record<string, number> = {
   EURUSD: 100000,
   GBPUSD: 100000,
@@ -37,7 +40,7 @@ function contractSize(symbol: string) {
   return CONTRACT_SIZES[symbol] ?? CONTRACT_SIZES.default
 }
 
-function calculateMargin({
+export function calculateMargin({
   lotSize,
   price,
   leverage,
@@ -48,7 +51,8 @@ function calculateMargin({
   leverage: number
   symbol: string
 }) {
-  return (lotSize * contractSize(symbol) * price) / Math.max(1, leverage)
+  const lev = Math.max(1, leverage || DEFAULT_LEVERAGE)
+  return (lotSize * contractSize(symbol) * price) / lev
 }
 
 function calculateCommission(symbol: string, lotSize: number, price: number) {
@@ -63,7 +67,7 @@ function calculateCommission(symbol: string, lotSize: number, price: number) {
   return 7 * lotSize
 }
 
-function calculateProfit(input: {
+export function calculateProfit(input: {
   side: string
   lotSize: number
   openPrice: number
@@ -75,6 +79,94 @@ function calculateProfit(input: {
       ? input.currentPrice - input.openPrice
       : input.openPrice - input.currentPrice
   return diff * contractSize(input.symbol) * input.lotSize
+}
+
+function roundMoney(n: number) {
+  return Math.round(n * 100) / 100
+}
+
+/**
+ * Standard trading-account metrics:
+ * - Balance: settled cash (after commissions / closed P/L)
+ * - Equity: balance + floating P/L
+ * - Margin: sum of margin used by open positions
+ * - Free margin: equity − margin
+ * - Margin level: (equity / margin) × 100%  (0 when no margin)
+ */
+export async function recalculateAccount(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user) return null
+
+  const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
+  const openPositions = await prisma.position.findMany({
+    where: { userId, status: 'OPEN' },
+  })
+
+  let floating = 0
+  let margin = 0
+
+  for (const pos of openPositions) {
+    const market = await getSymbolQuote(pos.symbol)
+    const currentPrice = market
+      ? pos.side === 'BUY'
+        ? market.bid
+        : market.ask
+      : Number(pos.currentPrice)
+
+    const profit = calculateProfit({
+      side: pos.side,
+      lotSize: Number(pos.lotSize),
+      openPrice: Number(pos.openPrice),
+      currentPrice,
+      symbol: pos.symbol,
+    })
+
+    const marginUsed = calculateMargin({
+      lotSize: Number(pos.lotSize),
+      price: Number(pos.openPrice),
+      leverage,
+      symbol: pos.symbol,
+    })
+
+    floating += profit
+    margin += marginUsed
+
+    await prisma.position.update({
+      where: { id: pos.id },
+      data: {
+        currentPrice,
+        profit: roundMoney(profit),
+        marginUsed: roundMoney(marginUsed),
+      },
+    })
+  }
+
+  const balance = Number(user.balance)
+  const equity = roundMoney(balance + floating)
+  margin = roundMoney(margin)
+  const freeMargin = roundMoney(equity - margin)
+  const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : 0
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      equity,
+      margin,
+      freeMargin,
+      marginLevel,
+      leverage,
+    },
+  })
+
+  return {
+    balance: roundMoney(Number(updated.balance)),
+    equity: Number(updated.equity),
+    margin: Number(updated.margin),
+    freeMargin: Number(updated.freeMargin),
+    marginLevel: Number(updated.marginLevel),
+    leverage: updated.leverage,
+    floatingProfit: roundMoney(floating),
+  }
 }
 
 export async function placeMarketOrder(
@@ -98,6 +190,10 @@ export async function placeMarketOrder(
     throw new Error('Account is not active. Please wait for admin approval before trading.')
   }
 
+  // Fresh metrics before risk checks
+  const metrics = await recalculateAccount(userId)
+  const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
+
   const market = await getSymbolQuote(symbol)
   if (!market) throw new Error('Symbol unavailable')
 
@@ -105,7 +201,7 @@ export async function placeMarketOrder(
   const marginRequired = calculateMargin({
     lotSize: input.lotSize,
     price,
-    leverage: user.leverage,
+    leverage,
     symbol,
   })
 
@@ -122,13 +218,14 @@ export async function placeMarketOrder(
     }
   }
 
-  if (Number(user.freeMargin) < marginRequired) {
+  const available = metrics?.freeMargin ?? Number(user.freeMargin)
+  if (available < marginRequired) {
     throw new Error(
-      `Insufficient margin. Required: $${marginRequired.toFixed(2)}, Available: $${Number(user.freeMargin).toFixed(2)}`
+      `Insufficient margin. Required: $${marginRequired.toFixed(2)}, Available: $${available.toFixed(2)}`
     )
   }
 
-  const commission = calculateCommission(symbol, input.lotSize, price)
+  const commission = roundMoney(calculateCommission(symbol, input.lotSize, price))
   const position = await prisma.position.create({
     data: {
       userId,
@@ -139,18 +236,18 @@ export async function placeMarketOrder(
       currentPrice: price,
       stopLoss: input.stopLoss,
       takeProfit: input.takeProfit,
-      marginUsed: marginRequired,
+      marginUsed: roundMoney(marginRequired),
       commission,
+      profit: 0,
       status: 'OPEN',
     },
   })
 
+  // Commission settles against balance; margin/equity/freeMargin come from recalculate
   await prisma.user.update({
     where: { id: userId },
     data: {
-      balance: Number(user.balance) - commission,
-      margin: Number(user.margin) + marginRequired,
-      freeMargin: Number(user.freeMargin) - marginRequired - commission,
+      balance: roundMoney(Number(user.balance) - commission),
     },
   })
 
@@ -170,13 +267,15 @@ export async function closePosition(positionId: string, userId: string) {
       ? market?.bid ?? Number(position.currentPrice)
       : market?.ask ?? Number(position.currentPrice)
 
-  const profit = calculateProfit({
-    side: position.side,
-    lotSize: Number(position.lotSize),
-    openPrice: Number(position.openPrice),
-    currentPrice,
-    symbol: position.symbol,
-  })
+  const profit = roundMoney(
+    calculateProfit({
+      side: position.side,
+      lotSize: Number(position.lotSize),
+      openPrice: Number(position.openPrice),
+      currentPrice,
+      symbol: position.symbol,
+    })
+  )
 
   await prisma.position.update({
     where: { id: positionId },
@@ -192,17 +291,11 @@ export async function closePosition(positionId: string, userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return { success: true, profit }
 
-  const newBalance = Number(user.balance) + profit
-  const newMargin = Math.max(0, Number(user.margin) - Number(position.marginUsed))
-  const newFreeMargin = Number(user.freeMargin) + Number(position.marginUsed)
+  const newBalance = roundMoney(Number(user.balance) + profit)
 
-  const updated = await prisma.user.update({
+  await prisma.user.update({
     where: { id: userId },
-    data: {
-      balance: newBalance,
-      margin: newMargin,
-      freeMargin: newFreeMargin,
-    },
+    data: { balance: newBalance },
   })
 
   await prisma.closedTrade.create({
@@ -226,51 +319,10 @@ export async function closePosition(positionId: string, userId: string) {
       type: profit >= 0 ? 'TRADE_PROFIT' : 'TRADE_LOSS',
       amount: profit,
       balanceBefore: Number(user.balance),
-      balanceAfter: Number(updated.balance),
+      balanceAfter: newBalance,
     },
   })
 
   await recalculateAccount(userId)
   return { success: true, profit }
-}
-
-export async function recalculateAccount(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) return
-
-  const openPositions = await prisma.position.findMany({
-    where: { userId, status: 'OPEN' },
-  })
-
-  // Refresh mark-to-market for open positions
-  for (const pos of openPositions) {
-    const market = await getSymbolQuote(pos.symbol)
-    if (!market) continue
-    const currentPrice = pos.side === 'BUY' ? market.bid : market.ask
-    const profit = calculateProfit({
-      side: pos.side,
-      lotSize: Number(pos.lotSize),
-      openPrice: Number(pos.openPrice),
-      currentPrice,
-      symbol: pos.symbol,
-    })
-    await prisma.position.update({
-      where: { id: pos.id },
-      data: { currentPrice, profit },
-    })
-  }
-
-  const refreshed = await prisma.position.findMany({
-    where: { userId, status: 'OPEN' },
-  })
-  const margin = refreshed.reduce((sum, p) => sum + Number(p.marginUsed), 0)
-  const floating = refreshed.reduce((sum, p) => sum + Number(p.profit), 0)
-  const equity = Number(user.balance) + floating
-  const freeMargin = equity - margin
-  const marginLevel = margin > 0 ? (equity / margin) * 100 : 0
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { equity, margin, freeMargin, marginLevel },
-  })
 }

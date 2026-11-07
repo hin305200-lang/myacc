@@ -12,14 +12,14 @@ export function ProfileDrawer({ open, onClose }: Props) {
   const { profile, isLoading, update, updating } = useProfile()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
-  const [leverage, setLeverage] = useState(100)
+  const [leverage, setLeverage] = useState(10)
   const [status, setStatus] = useState<string | null>(null)
 
   useEffect(() => {
     if (profile) {
       setFullName(profile.fullName ?? '')
       setEmail(profile.email ?? '')
-      setLeverage(profile.leverage ?? 100)
+      setLeverage(profile.leverage ?? 10)
     }
   }, [profile])
 

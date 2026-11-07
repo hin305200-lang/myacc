@@ -105,7 +105,7 @@ export default function TradeMarketsLayout({
           <div className="flex flex-col hidden xl:flex">
             <span className="text-[#94a3b8]">Margin level</span>
             <span className="text-white font-semibold text-xs sm:text-sm">
-              {userId ? (account.marginLevel > 0 ? `${formatCurrency(account.marginLevel)}%` : '0.00%') : '—'}
+              {userId ? (account.marginLevel > 0 ? `${Number(account.marginLevel).toFixed(2)}%` : '—') : '—'}
             </span>
           </div>
           <div className="flex flex-col">
