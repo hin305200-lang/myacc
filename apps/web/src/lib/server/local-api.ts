@@ -667,7 +667,7 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
     if (!user) return json({ error: 'User not found' }, 404)
 
     const becomingActive = parsed.data.status === 'ACTIVE' && user.status !== 'ACTIVE'
-    const credit = becomingActive ? parsed.data.startingBalance ?? 250 : 0
+    const credit = becomingActive ? parsed.data.startingBalance ?? 350 : 0
 
     const updated = await prisma.user.update({
       where: { id: user.id },

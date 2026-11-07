@@ -160,7 +160,7 @@ export default function AdminDashboard() {
                               apiClient
                                 .post(
                                   `/admin/users/${u.id}/status`,
-                                  { status: 'ACTIVE', startingBalance: 250 },
+                                  { status: 'ACTIVE', startingBalance: 350 },
                                   accessToken ?? undefined
                                 )
                                 .then(() => refetch())

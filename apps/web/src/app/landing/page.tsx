@@ -160,7 +160,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] text-white/80">Equity</p>
-                  <p className="text-xl font-bold text-white">$250.00</p>
+                  <p className="text-xl font-bold text-white">$350.00</p>
                 </div>
               </div>
               <div className="p-6 space-y-4">
@@ -321,7 +321,7 @@ export default function LandingPage() {
             </div>
             <div className="mt-8 grid grid-cols-3 gap-6 text-center">
               <div>
-                <div className="text-3xl font-bold mb-1">$250</div>
+                <div className="text-3xl font-bold mb-1">$350</div>
                 <div className="text-sm text-white/80">Starting Balance</div>
               </div>
               <div>
