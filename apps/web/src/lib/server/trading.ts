@@ -1,5 +1,10 @@
 import { prisma } from './prisma'
-import { assertExecutableQuote, getSymbolQuote, isTradableSymbol } from './market-prices'
+import {
+  assertExecutableQuote,
+  getQuotesForSymbols,
+  getSymbolQuote,
+  isTradableSymbol,
+} from './market-prices'
 import { contractSizeFor } from './instrument-specs'
 import { evaluateMarginLevel, MARGIN_CALL_LEVEL, STOP_OUT_LEVEL } from './trading-risk'
 
@@ -122,51 +127,108 @@ async function settleClose(
   profit: number,
   reason: string
 ) {
-  await prisma.position.update({
-    where: { id: position.id },
-    data: {
-      status: 'CLOSED',
-      closePrice,
-      currentPrice: closePrice,
-      profit: roundMoney(profit),
-      closedAt: new Date(),
-    },
-  })
-
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return
 
-  const newBalance = roundMoney(Number(user.balance) + profit)
+  const realized = roundMoney(profit)
+  const newBalance = roundMoney(Number(user.balance) + realized)
+
+  await prisma.$transaction([
+    prisma.position.update({
+      where: { id: position.id },
+      data: {
+        status: 'CLOSED',
+        closePrice,
+        currentPrice: closePrice,
+        profit: realized,
+        closedAt: new Date(),
+      },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { balance: newBalance },
+    }),
+    prisma.closedTrade.create({
+      data: {
+        userId,
+        symbol: position.symbol,
+        side: position.side,
+        lotSize: position.lotSize,
+        openPrice: position.openPrice,
+        closePrice,
+        profit: realized,
+        swap: position.swap,
+        commission: position.commission,
+        openedAt: position.openedAt,
+      },
+    }),
+    prisma.transaction.create({
+      data: {
+        userId,
+        type: realized >= 0 ? 'TRADE_PROFIT' : 'TRADE_LOSS',
+        amount: realized,
+        balanceBefore: Number(user.balance),
+        balanceAfter: newBalance,
+        note: reason,
+      },
+    }),
+  ])
+}
+
+/** Fast equity refresh from DB numbers only (no external quote calls). */
+async function applyAccountTotals(userId: string): Promise<AccountMetrics | null> {
+  const [user, positions] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.position.findMany({ where: { userId, status: 'OPEN' } }),
+  ])
+  if (!user) return null
+
+  let floating = 0
+  let margin = 0
+  let floatingProfit = 0
+  let floatingLoss = 0
+  for (const pos of positions) {
+    const p = Number(pos.profit)
+    floating += p
+    margin += Number(pos.marginUsed)
+    if (p >= 0) floatingProfit += p
+    else floatingLoss += p
+  }
+
+  const balance = Number(user.balance)
+  const credit = Number((user as any).credit ?? 0)
+  const equity = roundMoney(balance + credit + floating)
+  margin = roundMoney(margin)
+  const freeMargin = roundMoney(equity - margin)
+  const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : null
+  const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
+
   await prisma.user.update({
     where: { id: userId },
-    data: { balance: newBalance },
-  })
-
-  await prisma.closedTrade.create({
     data: {
-      userId,
-      symbol: position.symbol,
-      side: position.side,
-      lotSize: position.lotSize,
-      openPrice: position.openPrice,
-      closePrice,
-      profit: roundMoney(profit),
-      swap: position.swap,
-      commission: position.commission,
-      openedAt: position.openedAt,
+      equity,
+      margin,
+      freeMargin,
+      marginLevel: marginLevel ?? 0,
+      leverage,
     },
   })
 
-  await prisma.transaction.create({
-    data: {
-      userId,
-      type: profit >= 0 ? 'TRADE_PROFIT' : 'TRADE_LOSS',
-      amount: roundMoney(profit),
-      balanceBefore: Number(user.balance),
-      balanceAfter: newBalance,
-      note: reason,
-    },
-  })
+  return {
+    balance: roundMoney(balance),
+    credit: roundMoney(credit),
+    equity,
+    margin,
+    freeMargin,
+    marginLevel,
+    leverage,
+    floatingProfit: roundMoney(floatingProfit),
+    floatingLoss: roundMoney(floatingLoss),
+    netFloatingPl: roundMoney(floating),
+    marginCallLevel: MARGIN_CALL_LEVEL,
+    stopOutLevel: STOP_OUT_LEVEL,
+    marginAlert: evaluateMarginLevel(marginLevel, margin),
+  }
 }
 
 /**
@@ -191,11 +253,17 @@ export async function recalculateAccount(userId: string): Promise<AccountMetrics
     orderBy: { openedAt: 'asc' },
   })) as OpenPosRow[]
 
-  // Pass 1 — mark to market + SL/TP
+  if (openPositions.length === 0) {
+    return applyAccountTotals(userId)
+  }
+
+  // One batch quote fetch for all open symbols (not 1 HTTP call per position)
+  const quotes = await getQuotesForSymbols(openPositions.map((p) => p.symbol))
   const toClose: Array<{ pos: OpenPosRow; price: number; profit: number; reason: string }> = []
+  const updates: Array<ReturnType<typeof prisma.position.update>> = []
 
   for (const pos of openPositions) {
-    const market = await getSymbolQuote(pos.symbol)
+    const market = quotes.get(pos.symbol.toUpperCase())
     const bid = market && market.bid > 0 ? market.bid : Number(pos.currentPrice)
     const ask = market && market.ask > 0 ? market.ask : Number(pos.currentPrice)
     const currentPrice = executablePrice(pos.side, bid, ask)
@@ -215,14 +283,16 @@ export async function recalculateAccount(userId: string): Promise<AccountMetrics
       symbol: pos.symbol,
     })
 
-    await prisma.position.update({
-      where: { id: pos.id },
-      data: {
-        currentPrice: roundPrice(currentPrice),
-        profit: roundMoney(profit),
-        marginUsed: roundMoney(marginUsed),
-      },
-    })
+    updates.push(
+      prisma.position.update({
+        where: { id: pos.id },
+        data: {
+          currentPrice: roundPrice(currentPrice),
+          profit: roundMoney(profit),
+          marginUsed: roundMoney(marginUsed),
+        },
+      })
+    )
 
     const hit = slTpHit(
       pos.side,
@@ -233,7 +303,7 @@ export async function recalculateAccount(userId: string): Promise<AccountMetrics
     )
     if (hit) {
       toClose.push({
-        pos,
+        pos: { ...pos, profit: roundMoney(profit), currentPrice } as OpenPosRow,
         price: currentPrice,
         profit,
         reason: hit === 'SL' ? 'Stop Loss triggered' : 'Take Profit triggered',
@@ -241,71 +311,27 @@ export async function recalculateAccount(userId: string): Promise<AccountMetrics
     }
   }
 
+  if (updates.length) await Promise.all(updates)
+
   for (const item of toClose) {
     await settleClose(item.pos, userId, item.price, item.profit, item.reason)
   }
 
-  if (toClose.length) {
+  // Stop-out loop (rare) — use already-fetched quotes when possible
+  let guard = 0
+  while (guard++ < 20) {
+    const metrics = await applyAccountTotals(userId)
+    if (!metrics || metrics.marginAlert.level !== 'stop_out' || metrics.margin <= 0) {
+      return metrics
+    }
     openPositions = (await prisma.position.findMany({
       where: { userId, status: 'OPEN' },
-      orderBy: { openedAt: 'asc' },
+      orderBy: { profit: 'asc' },
     })) as OpenPosRow[]
-  }
+    const worst = openPositions[0]
+    if (!worst) return metrics
 
-  const computeTotals = async () => {
-    const positions = (await prisma.position.findMany({
-      where: { userId, status: 'OPEN' },
-    })) as OpenPosRow[]
-    const freshUser = await prisma.user.findUnique({ where: { id: userId } })
-    if (!freshUser) return null
-
-    let floating = 0
-    let margin = 0
-    let floatingProfit = 0
-    let floatingLoss = 0
-
-    for (const pos of positions) {
-      const p = Number(pos.profit)
-      floating += p
-      margin += Number(pos.marginUsed)
-      if (p >= 0) floatingProfit += p
-      else floatingLoss += p
-    }
-
-    const balance = Number(freshUser.balance)
-    const credit = Number((freshUser as any).credit ?? 0)
-    const equity = roundMoney(balance + credit + floating)
-    margin = roundMoney(margin)
-    const freeMargin = roundMoney(equity - margin)
-    const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : null
-
-    return {
-      positions,
-      balance,
-      credit,
-      equity,
-      margin,
-      freeMargin,
-      marginLevel,
-      floating: roundMoney(floating),
-      floatingProfit: roundMoney(floatingProfit),
-      floatingLoss: roundMoney(floatingLoss),
-      leverage: Math.max(1, freshUser.leverage || DEFAULT_LEVERAGE),
-    }
-  }
-
-  // Pass 2 — stop-out: close worst losers until margin level recovers (or no positions left)
-  let guard = 0
-  while (guard++ < 50) {
-    const totals = await computeTotals()
-    if (!totals) return null
-    const alert = evaluateMarginLevel(totals.marginLevel, totals.margin)
-    if (alert.level !== 'stop_out' || totals.positions.length === 0) break
-
-    const worst = [...totals.positions].sort((a, b) => Number(a.profit) - Number(b.profit))[0]
-    if (!worst) break
-
-    const market = await getSymbolQuote(worst.symbol)
+    const market = quotes.get(worst.symbol.toUpperCase()) || (await getSymbolQuote(worst.symbol))
     const bid = market && market.bid > 0 ? market.bid : Number(worst.currentPrice)
     const ask = market && market.ask > 0 ? market.ask : Number(worst.currentPrice)
     const closePrice = executablePrice(worst.side, bid, ask)
@@ -316,41 +342,15 @@ export async function recalculateAccount(userId: string): Promise<AccountMetrics
       currentPrice: closePrice,
       symbol: worst.symbol,
     })
-    await settleClose(worst, userId, closePrice, profit, `Stop-out at margin level ${totals.marginLevel}%`)
+    await settleClose(worst, userId, closePrice, profit, `Stop-out at margin level ${metrics.marginLevel}%`)
   }
 
-  const finals = await computeTotals()
-  if (!finals) return null
+  return applyAccountTotals(userId)
+}
 
-  const marginAlert = evaluateMarginLevel(finals.marginLevel, finals.margin)
-
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      equity: finals.equity,
-      margin: finals.margin,
-      freeMargin: finals.freeMargin,
-      // Persist 0 when N/A so DB column stays non-null; API exposes null separately
-      marginLevel: finals.marginLevel ?? 0,
-      leverage: finals.leverage,
-    },
-  })
-
-  return {
-    balance: roundMoney(Number(updated.balance)),
-    credit: roundMoney(finals.credit),
-    equity: Number(updated.equity),
-    margin: Number(updated.margin),
-    freeMargin: Number(updated.freeMargin),
-    marginLevel: finals.marginLevel,
-    leverage: updated.leverage,
-    floatingProfit: finals.floatingProfit,
-    floatingLoss: finals.floatingLoss,
-    netFloatingPl: finals.floating,
-    marginCallLevel: MARGIN_CALL_LEVEL,
-    stopOutLevel: STOP_OUT_LEVEL,
-    marginAlert,
-  }
+export type OrderResult = {
+  position: any
+  account: AccountMetrics | null
 }
 
 export async function placeMarketOrder(
@@ -362,7 +362,7 @@ export async function placeMarketOrder(
     stopLoss?: number
     takeProfit?: number
   }
-) {
+): Promise<OrderResult> {
   const symbol = input.symbol.toUpperCase()
   if (!isTradableSymbol(symbol)) {
     throw new Error('Symbol is not available for trading')
@@ -374,10 +374,9 @@ export async function placeMarketOrder(
     throw new Error('Account is not active. Please wait for admin approval before trading.')
   }
 
-  const metrics = await recalculateAccount(userId)
   const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
 
-  // Never accept a manual/random price — force a fresh executable quote
+  // Fresh/cached executable quote only — skip full pre-recalc (was the main delay)
   const market = await assertExecutableQuote(symbol)
   const price = input.side === 'BUY' ? market.ask : market.bid
 
@@ -401,7 +400,7 @@ export async function placeMarketOrder(
     }
   }
 
-  const available = metrics?.freeMargin ?? Number(user.freeMargin)
+  const available = Number(user.freeMargin)
   if (available < marginRequired) {
     throw new Error(
       `Insufficient free margin. Required: $${roundMoney(marginRequired).toFixed(2)}, Available: $${roundMoney(available).toFixed(2)}`
@@ -409,46 +408,48 @@ export async function placeMarketOrder(
   }
 
   const commission = roundMoney(calculateCommission(symbol, input.lotSize, price))
-  const position = await prisma.position.create({
-    data: {
-      userId,
-      symbol,
-      side: input.side,
-      lotSize: input.lotSize,
-      openPrice: price,
-      currentPrice: price,
-      stopLoss: input.stopLoss,
-      takeProfit: input.takeProfit,
-      marginUsed: roundMoney(marginRequired),
-      commission,
-      profit: 0,
-      status: 'OPEN',
-    },
-  })
+  const newBalance = roundMoney(Number(user.balance) - commission)
 
-  // Commission settles into Balance
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      balance: roundMoney(Number(user.balance) - commission),
-    },
-  })
-
-  if (commission !== 0) {
-    await prisma.transaction.create({
+  const [position] = await prisma.$transaction([
+    prisma.position.create({
       data: {
         userId,
-        type: 'ADJUSTMENT',
-        amount: -commission,
-        balanceBefore: Number(user.balance),
-        balanceAfter: roundMoney(Number(user.balance) - commission),
-        note: `Commission ${symbol} ${input.side} ${input.lotSize} lot`,
+        symbol,
+        side: input.side,
+        lotSize: input.lotSize,
+        openPrice: price,
+        currentPrice: price,
+        stopLoss: input.stopLoss,
+        takeProfit: input.takeProfit,
+        marginUsed: roundMoney(marginRequired),
+        commission,
+        profit: 0,
+        status: 'OPEN',
       },
-    })
-  }
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { balance: newBalance },
+    }),
+    ...(commission !== 0
+      ? [
+          prisma.transaction.create({
+            data: {
+              userId,
+              type: 'ADJUSTMENT',
+              amount: -commission,
+              balanceBefore: Number(user.balance),
+              balanceAfter: newBalance,
+              note: `Commission ${symbol} ${input.side} ${input.lotSize} lot`,
+            },
+          }),
+        ]
+      : []),
+  ])
 
-  await recalculateAccount(userId)
-  return position
+  // Fast local totals (no second full market sweep)
+  const account = await applyAccountTotals(userId)
+  return { position, account }
 }
 
 export async function closePosition(positionId: string, userId: string) {
@@ -473,6 +474,6 @@ export async function closePosition(positionId: string, userId: string) {
   )
 
   await settleClose(position as any, userId, currentPrice, profit, 'Manual close')
-  await recalculateAccount(userId)
-  return { success: true, profit, closePrice: currentPrice }
+  const account = await applyAccountTotals(userId)
+  return { success: true, profit, closePrice: currentPrice, account }
 }

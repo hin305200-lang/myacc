@@ -253,6 +253,26 @@ export default function TradingPlatform() {
 
   const canTrade = !!accessToken && user?.status === 'ACTIVE'
 
+  const applyAccountFromResponse = (account: any) => {
+    if (!account || typeof account !== 'object') return
+    queryClient.setQueryData(['account-summary'], {
+      balance: Number(account.balance ?? 0),
+      credit: Number(account.credit ?? 0),
+      equity: Number(account.equity ?? 0),
+      freeMargin: Number(account.freeMargin ?? 0),
+      margin: Number(account.margin ?? 0),
+      marginLevel: account.marginLevel == null ? null : Number(account.marginLevel),
+      leverage: account.leverage != null ? Number(account.leverage) : undefined,
+      profit: Number(account.netFloatingPl ?? account.profit ?? 0),
+      floatingProfit: Number(account.floatingProfit ?? 0),
+      floatingLoss: Number(account.floatingLoss ?? 0),
+      netFloatingPl: Number(account.netFloatingPl ?? account.profit ?? 0),
+      marginCallLevel: account.marginCallLevel,
+      stopOutLevel: account.stopOutLevel,
+      marginAlert: account.marginAlert ?? { level: 'ok' },
+    })
+  }
+
   const handleTrade = async (side: 'BUY' | 'SELL', stopLoss?: number, takeProfit?: number) => {
     if (!selectedSymbol || !accessToken || tradeLoading) {
       return
@@ -266,7 +286,7 @@ export default function TradingPlatform() {
     }
     setTradeLoading(true)
     try {
-      const response = await apiClient.post(
+      const response = await apiClient.post<{ data: any; account?: any }>(
         '/orders',
         {
           symbol: selectedSymbol.symbol,
@@ -277,24 +297,35 @@ export default function TradingPlatform() {
         },
         accessToken
       )
-      // Immediately refresh positions and account
-      await refetchPositions()
-      queryClient.invalidateQueries({ queryKey: ['positions-open'] })
-      queryClient.invalidateQueries({ queryKey: ['account-summary'] })
-      // Also refetch after a short delay to ensure backend has processed
-      setTimeout(() => {
-        refetchPositions()
-        queryClient.refetchQueries({ queryKey: ['positions-open'] })
-        queryClient.refetchQueries({ queryKey: ['account-summary'] })
-      }, 500)
+      // Instant UI update from response — do not wait on follow-up fetches
+      applyAccountFromResponse((response as any).account)
+      if ((response as any).data) {
+        queryClient.setQueryData(['positions-open'], (prev: any[] | undefined) => {
+          const row = (response as any).data
+          const mapped = {
+            ...row,
+            lotSize: Number(row.lotSize),
+            openPrice: Number(row.openPrice),
+            currentPrice: Number(row.currentPrice),
+            marginUsed: Number(row.marginUsed),
+            commission: Number(row.commission),
+            profit: Number(row.profit ?? 0),
+            openedAt: row.openedAt || new Date().toISOString(),
+          }
+          return [mapped, ...(prev || [])]
+        })
+      }
       setIsMobileTradeOpen(false)
-      // Show success notification
-      setToast({ message: `${side} order executed successfully for ${selectedSymbol.symbol}`, type: 'success' })
-      console.log('Trade executed successfully:', response)
+      setToast({ message: `${side} ${selectedSymbol.symbol} filled`, type: 'success' })
+      // Background sync (non-blocking)
+      void refetchPositions()
+      void queryClient.invalidateQueries({ queryKey: ['account-summary'] })
     } catch (error: any) {
       console.error('Trade failed', error)
-      // Show error notification to user
-      const errorMessage = error?.response?.data?.error?.message || error?.message || 'Trade execution failed. Please check your balance and try again.'
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        'Trade execution failed. Please check your balance and try again.'
       setToast({ message: errorMessage, type: 'error' })
     } finally {
       setTradeLoading(false)
@@ -310,19 +341,27 @@ export default function TradingPlatform() {
       })
       return
     }
+    // Optimistic remove for instant UI
+    queryClient.setQueryData(['positions-open'], (prev: any[] | undefined) =>
+      (prev || []).filter((p) => p.id !== id)
+    )
     try {
-      await apiClient.post(`/orders/${id}/close`, {}, accessToken)
-      // Immediately refresh positions and account
-      await Promise.all([
-        refetchPositions(),
-        queryClient.invalidateQueries({ queryKey: ['account-summary'] }),
-        queryClient.refetchQueries({ queryKey: ['account-summary'] }),
-      ])
-      setToast({ message: 'Position closed successfully. Balance updated.', type: 'success' })
-      console.log('Position closed successfully')
+      const result = await apiClient.post<{ success: boolean; profit: number; account?: any }>(
+        `/orders/${id}/close`,
+        {},
+        accessToken
+      )
+      applyAccountFromResponse((result as any).account)
+      setToast({ message: 'Position closed', type: 'success' })
+      void refetchPositions()
+      void queryClient.invalidateQueries({ queryKey: ['account-summary'] })
     } catch (error: any) {
       console.error('Close position failed', error)
-      const errorMessage = error?.response?.data?.error?.message || error?.message || 'Failed to close position. Please try again.'
+      void refetchPositions()
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        'Failed to close position. Please try again.'
       setToast({ message: errorMessage, type: 'error' })
     }
   }

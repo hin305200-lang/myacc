@@ -55,7 +55,11 @@ const STALE_TRADE_AGE_SEC = Number(process.env.MARKET_STALE_TRADE_AGE_SEC || 120
 const quoteCache = new Map<string, MarketQuote>()
 let lastBatchFetch = 0
 let fetchPromise: Promise<void> | null = null
-const CACHE_TTL_MS = 2_000
+/** Soft cache for UI / mark-to-market (ms) */
+const CACHE_TTL_MS = 1_500
+/** Prefer cached quote for trade execution if newer than this */
+const EXECUTION_CACHE_MS = 5_000
+const quoteFetchedAt = new Map<string, number>()
 
 function roundPrice(n: number, digits = 5) {
   const f = 10 ** digits
@@ -191,12 +195,14 @@ async function refreshAllQuotes(force = false) {
     try {
       const providerList = ALL_PLATFORM_SYMBOLS.map((s) => providerSymbolFor(s))
       const batch = await fetchLatestBatch(providerList)
+      const nowTs = Date.now()
       for (const platform of ALL_PLATFORM_SYMBOLS) {
         const provider = providerSymbolFor(platform)
         const tick = batch[provider] || null
         quoteCache.set(platform, tick ? toQuote(platform, tick) : unavailableQuote(platform))
+        if (tick) quoteFetchedAt.set(platform, nowTs)
       }
-      lastBatchFetch = Date.now()
+      lastBatchFetch = nowTs
     } catch (err) {
       console.error('[market-prices] batch refresh failed', err)
       // Keep last good cache; mark missing as unavailable only if empty
@@ -222,11 +228,22 @@ export async function getSymbolQuote(symbol: string, opts?: { force?: boolean })
   const platform = symbol.toUpperCase()
   if (!getInstrument(platform)) return null
 
+  const cached = quoteCache.get(platform)
+  const age = Date.now() - (quoteFetchedAt.get(platform) || 0)
+  if (!opts?.force && cached && cached.bid > 0 && age < CACHE_TTL_MS) {
+    return cached
+  }
+
   if (opts?.force) {
+    // Reuse a very fresh cache for execution speed
+    if (cached && cached.bid > 0 && cached.ask > 0 && age < EXECUTION_CACHE_MS) {
+      return cached
+    }
     try {
       const tick = await fetchOne(providerSymbolFor(platform))
       const quote = tick ? toQuote(platform, tick) : unavailableQuote(platform)
       quoteCache.set(platform, quote)
+      quoteFetchedAt.set(platform, Date.now())
       return quote
     } catch (err) {
       console.error('[market-prices] single quote failed', platform, err)
@@ -236,6 +253,47 @@ export async function getSymbolQuote(symbol: string, opts?: { force?: boolean })
 
   await refreshAllQuotes(false)
   return quoteCache.get(platform) ?? unavailableQuote(platform)
+}
+
+/** Batch-fetch only the symbols needed (fast path for mark-to-market). */
+export async function getQuotesForSymbols(symbols: string[]): Promise<Map<string, MarketQuote>> {
+  const out = new Map<string, MarketQuote>()
+  const unique = Array.from(new Set(symbols.map((s) => s.toUpperCase()).filter((s) => getInstrument(s))))
+  if (unique.length === 0) return out
+
+  const now = Date.now()
+  const needFetch: string[] = []
+  for (const platform of unique) {
+    const cached = quoteCache.get(platform)
+    const age = now - (quoteFetchedAt.get(platform) || 0)
+    if (cached && cached.bid > 0 && age < CACHE_TTL_MS) {
+      out.set(platform, cached)
+    } else {
+      needFetch.push(platform)
+    }
+  }
+
+  if (needFetch.length === 0) return out
+
+  try {
+    const providers = needFetch.map((s) => providerSymbolFor(s))
+    const batch = await fetchLatestBatch(providers)
+    const fetchedAt = Date.now()
+    for (const platform of needFetch) {
+      const tick = batch[providerSymbolFor(platform)] || null
+      const quote = tick ? toQuote(platform, tick) : quoteCache.get(platform) || unavailableQuote(platform)
+      quoteCache.set(platform, quote)
+      if (tick) quoteFetchedAt.set(platform, fetchedAt)
+      out.set(platform, quote)
+    }
+  } catch (err) {
+    console.error('[market-prices] targeted batch failed', err)
+    for (const platform of needFetch) {
+      out.set(platform, quoteCache.get(platform) ?? unavailableQuote(platform))
+    }
+  }
+
+  return out
 }
 
 export function isTradableSymbol(symbol: string) {

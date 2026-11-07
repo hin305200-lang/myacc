@@ -181,6 +181,7 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
   const detail = parts[2]
 
   if (req.method === 'GET' && section === 'summary') {
+    // Full mark-to-market (batched quotes) — kept fast for live equity/P/L
     const metrics = await recalculateAccount(userId)
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -426,7 +427,8 @@ async function handleOrders(req: NextRequest, parts: string[]): Promise<HandlerR
   if (auth instanceof NextResponse) return auth
 
   if (req.method === 'GET' && parts.length === 1) {
-    await recalculateAccount(auth.userId)
+    // Light path: return open positions without blocking on a full market sweep.
+    // Summary polling already recalculates floating P/L.
     const positions = await prisma.position.findMany({
       where: { userId: auth.userId, status: 'OPEN' },
       orderBy: { openedAt: 'desc' },
@@ -460,7 +462,7 @@ async function handleOrders(req: NextRequest, parts: string[]): Promise<HandlerR
       .safeParse(body)
     if (!parsed.success) return json({ error: parsed.error.flatten() }, 400)
     try {
-      const position = await placeMarketOrder(auth.userId, parsed.data)
+      const { position, account } = await placeMarketOrder(auth.userId, parsed.data)
       return json(
         {
           data: {
@@ -472,6 +474,7 @@ async function handleOrders(req: NextRequest, parts: string[]): Promise<HandlerR
             commission: Number(position.commission),
             profit: Number(position.profit),
           },
+          account,
         },
         201
       )
