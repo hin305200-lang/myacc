@@ -55,7 +55,13 @@ async function requireUser(req: NextRequest): Promise<AuthPayload | NextResponse
   }
 }
 
-async function buildTokens(user: { id: string; email: string; role: string; status?: string }) {
+async function buildTokens(user: {
+  id: string
+  email: string
+  role: string
+  status?: string
+  kycStatus?: string
+}) {
   const payload: AuthPayload = {
     userId: user.id,
     email: user.email,
@@ -71,6 +77,7 @@ async function buildTokens(user: { id: string; email: string; role: string; stat
     user: {
       ...payload,
       status: user.status ?? 'PENDING',
+      kycStatus: user.kycStatus ?? 'REQUIRED',
     },
   }
 }
@@ -114,6 +121,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
         passwordHash,
         role: 'USER',
         status: 'PENDING',
+        kycStatus: 'REQUIRED',
         balance: 0,
         credit: 0,
         equity: 0,
@@ -129,7 +137,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
       {
         ...tokens,
         message:
-          'Account created. An administrator must approve your account before you can open trades.',
+          'Account created. Complete KYC (upload ID) then wait for admin approval before trading.',
       },
       201
     )
@@ -162,7 +170,14 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
     if (auth instanceof NextResponse) return auth
     const dbUser = await prisma.user.findUnique({
       where: { id: auth.userId },
-      select: { id: true, email: true, role: true, status: true, fullName: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        fullName: true,
+        kycStatus: true,
+      },
     })
     if (!dbUser) return json({ error: 'Unauthorized' }, 401)
     return json({
@@ -172,6 +187,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
         role: dbUser.role,
         status: dbUser.status,
         fullName: dbUser.fullName,
+        kycStatus: dbUser.kycStatus,
       },
     })
   }
@@ -440,6 +456,136 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
     return json({ data: rows.map((row) => ({ ...row, amount: Number(row.amount) })) })
   }
 
+  // ——— KYC ———
+  if (req.method === 'GET' && section === 'kyc') {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        fullName: true,
+        email: true,
+        phoneNumber: true,
+        status: true,
+        kycStatus: true,
+        dateOfBirth: true,
+        address: true,
+        country: true,
+        nationality: true,
+        idType: true,
+        idNumber: true,
+      },
+    })
+    if (!user) return json({ error: 'User not found' }, 404)
+    const documents = await prisma.kycDocument.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        docType: true,
+        fileName: true,
+        mimeType: true,
+        createdAt: true,
+      },
+    })
+    return json({ data: { ...user, documents } })
+  }
+
+  if (req.method === 'POST' && section === 'kyc' && detail === 'documents') {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({
+        docType: z.enum(['PASSPORT', 'NATIONAL_ID', 'DRIVING_LICENSE']),
+        fileName: z.string().min(1).max(200),
+        mimeType: z.string().min(3).max(100),
+        dataBase64: z.string().min(32).max(3_500_000), // ~2.5MB raw
+      })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid document upload (max ~2.5MB)' }, 400)
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    if (!allowed.includes(parsed.data.mimeType)) {
+      return json({ error: 'Only JPG, PNG, WEBP or PDF allowed' }, 400)
+    }
+
+    const count = await prisma.kycDocument.count({ where: { userId } })
+    if (count >= 5) return json({ error: 'Maximum 5 documents per account' }, 400)
+
+    const doc = await prisma.kycDocument.create({
+      data: {
+        userId,
+        docType: parsed.data.docType,
+        fileName: parsed.data.fileName,
+        mimeType: parsed.data.mimeType,
+        dataBase64: parsed.data.dataBase64.replace(/^data:[^;]+;base64,/, ''),
+      },
+      select: {
+        id: true,
+        docType: true,
+        fileName: true,
+        mimeType: true,
+        createdAt: true,
+      },
+    })
+
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (user && user.kycStatus !== 'APPROVED') {
+      const hasProfile = !!(user.dateOfBirth && user.address && user.idType && user.idNumber)
+      await prisma.user.update({
+        where: { id: userId },
+        data: { kycStatus: hasProfile ? 'SUBMITTED' : 'REQUIRED' },
+      })
+    }
+
+    return json({ data: doc }, 201)
+  }
+
+  if (req.method === 'POST' && section === 'kyc' && !detail) {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({
+        fullName: z.string().min(2).max(120).optional(),
+        phoneNumber: z.string().min(5).max(40).optional(),
+        dateOfBirth: z.string().min(4).max(32),
+        address: z.string().min(5).max(300),
+        country: z.string().min(2).max(80),
+        nationality: z.string().min(2).max(80),
+        idType: z.enum(['PASSPORT', 'NATIONAL_ID', 'DRIVING_LICENSE']),
+        idNumber: z.string().min(3).max(80),
+      })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid KYC details' }, 400)
+
+    const docs = await prisma.kycDocument.count({ where: { userId } })
+    const nextStatus = docs > 0 ? 'SUBMITTED' : 'REQUIRED'
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(parsed.data.fullName ? { fullName: parsed.data.fullName } : {}),
+        ...(parsed.data.phoneNumber ? { phoneNumber: parsed.data.phoneNumber } : {}),
+        dateOfBirth: parsed.data.dateOfBirth,
+        address: parsed.data.address,
+        country: parsed.data.country,
+        nationality: parsed.data.nationality,
+        idType: parsed.data.idType,
+        idNumber: parsed.data.idNumber,
+        kycStatus: nextStatus,
+      },
+      select: {
+        fullName: true,
+        phoneNumber: true,
+        status: true,
+        kycStatus: true,
+        dateOfBirth: true,
+        address: true,
+        country: true,
+        nationality: true,
+        idType: true,
+        idNumber: true,
+      },
+    })
+    return json({ data: updated })
+  }
+
   return null
 }
 
@@ -667,12 +813,13 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
   const auth = await requireAdmin(req)
   if (auth instanceof NextResponse) return auth
 
-  if (req.method === 'GET' && parts[1] === 'users') {
+  if (req.method === 'GET' && parts[1] === 'users' && !parts[2]) {
     const users = await prisma.user.findMany({
       select: {
         id: true,
         fullName: true,
         email: true,
+        phoneNumber: true,
         role: true,
         balance: true,
         credit: true,
@@ -682,13 +829,24 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
         marginLevel: true,
         leverage: true,
         status: true,
+        kycStatus: true,
+        country: true,
+        idType: true,
         createdAt: true,
+        _count: {
+          select: {
+            kycDocuments: true,
+            positions: { where: { status: 'OPEN' } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
     return json({
       data: users.map((u) => ({
         ...u,
+        documentCount: u._count.kycDocuments,
+        openPositions: u._count.positions,
         balance: Number(u.balance),
         credit: Number(u.credit),
         equity: Number(u.equity),
@@ -696,8 +854,190 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
         freeMargin: Number(u.freeMargin),
         marginLevel: Number(u.marginLevel),
         leverage: u.leverage || 10,
+        _count: undefined,
       })),
     })
+  }
+
+  // Full user profile + KYC docs (metadata) for admin review
+  if (req.method === 'GET' && parts[1] === 'users' && parts[2] && !parts[3]) {
+    const user = await prisma.user.findUnique({
+      where: { id: parts[2] },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phoneNumber: true,
+        role: true,
+        status: true,
+        kycStatus: true,
+        dateOfBirth: true,
+        address: true,
+        country: true,
+        nationality: true,
+        idType: true,
+        idNumber: true,
+        balance: true,
+        credit: true,
+        equity: true,
+        freeMargin: true,
+        createdAt: true,
+        kycDocuments: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            docType: true,
+            fileName: true,
+            mimeType: true,
+            createdAt: true,
+          },
+        },
+      },
+    })
+    if (!user) return json({ error: 'User not found' }, 404)
+    return json({
+      data: {
+        ...user,
+        balance: Number(user.balance),
+        credit: Number(user.credit),
+        equity: Number(user.equity),
+        freeMargin: Number(user.freeMargin),
+      },
+    })
+  }
+
+  // Fetch KYC document file for admin preview/download
+  if (
+    req.method === 'GET' &&
+    parts[1] === 'users' &&
+    parts[2] &&
+    parts[3] === 'documents' &&
+    parts[4]
+  ) {
+    const doc = await prisma.kycDocument.findFirst({
+      where: { id: parts[4], userId: parts[2] },
+    })
+    if (!doc) return json({ error: 'Document not found' }, 404)
+    return json({
+      data: {
+        id: doc.id,
+        docType: doc.docType,
+        fileName: doc.fileName,
+        mimeType: doc.mimeType,
+        dataBase64: doc.dataBase64,
+        createdAt: doc.createdAt,
+      },
+    })
+  }
+
+  // Admin: list open positions for a user
+  if (req.method === 'GET' && parts[1] === 'users' && parts[2] && parts[3] === 'positions') {
+    const positions = await prisma.position.findMany({
+      where: { userId: parts[2], status: 'OPEN' },
+      orderBy: { openedAt: 'desc' },
+    })
+    return json({
+      data: positions.map((pos) => ({
+        ...pos,
+        lotSize: Number(pos.lotSize),
+        openPrice: Number(pos.openPrice),
+        currentPrice: Number(pos.currentPrice),
+        stopLoss: pos.stopLoss != null ? Number(pos.stopLoss) : null,
+        takeProfit: pos.takeProfit != null ? Number(pos.takeProfit) : null,
+        marginUsed: Number(pos.marginUsed),
+        swap: Number(pos.swap),
+        commission: Number(pos.commission),
+        profit: Number(pos.profit),
+        closePrice: pos.closePrice != null ? Number(pos.closePrice) : null,
+      })),
+    })
+  }
+
+  // Admin: edit open position (price / time / P/L)
+  if (
+    (req.method === 'PATCH' || req.method === 'POST') &&
+    parts[1] === 'positions' &&
+    parts[2] &&
+    (parts[3] === 'edit' || !parts[3])
+  ) {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({
+        openPrice: z.number().positive().optional(),
+        currentPrice: z.number().positive().optional(),
+        profit: z.number().optional(),
+        openedAt: z.string().min(1).optional(),
+        stopLoss: z.number().nullable().optional(),
+        takeProfit: z.number().nullable().optional(),
+      })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid position edit' }, 400)
+
+    const position = await prisma.position.findUnique({ where: { id: parts[2] } })
+    if (!position || position.status !== 'OPEN') {
+      return json({ error: 'Open position not found' }, 404)
+    }
+
+    let openedAt: Date | undefined
+    if (parsed.data.openedAt) {
+      const d = new Date(parsed.data.openedAt)
+      if (Number.isNaN(d.getTime())) return json({ error: 'Invalid openedAt date' }, 400)
+      openedAt = d
+    }
+
+    const updated = await prisma.position.update({
+      where: { id: position.id },
+      data: {
+        ...(parsed.data.openPrice != null ? { openPrice: parsed.data.openPrice } : {}),
+        ...(parsed.data.currentPrice != null ? { currentPrice: parsed.data.currentPrice } : {}),
+        ...(parsed.data.profit != null ? { profit: parsed.data.profit } : {}),
+        ...(openedAt ? { openedAt } : {}),
+        ...(parsed.data.stopLoss !== undefined ? { stopLoss: parsed.data.stopLoss } : {}),
+        ...(parsed.data.takeProfit !== undefined ? { takeProfit: parsed.data.takeProfit } : {}),
+      },
+    })
+
+    await recalculateAccount(position.userId)
+    await prisma.adminActionLog.create({
+      data: {
+        adminId: auth.userId,
+        action: 'EDIT_POSITION',
+        payload: JSON.stringify({ positionId: position.id, changes: parsed.data }),
+      },
+    })
+
+    return json({
+      data: {
+        ...updated,
+        lotSize: Number(updated.lotSize),
+        openPrice: Number(updated.openPrice),
+        currentPrice: Number(updated.currentPrice),
+        profit: Number(updated.profit),
+        marginUsed: Number(updated.marginUsed),
+        swap: Number(updated.swap),
+        commission: Number(updated.commission),
+      },
+    })
+  }
+
+  // Admin KYC decision
+  if (
+    (req.method === 'POST' || req.method === 'PATCH') &&
+    parts[1] === 'users' &&
+    parts[2] &&
+    parts[3] === 'kyc'
+  ) {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({ kycStatus: z.enum(['APPROVED', 'REJECTED', 'REQUIRED', 'SUBMITTED']) })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: 'Invalid KYC status' }, 400)
+    const updated = await prisma.user.update({
+      where: { id: parts[2] },
+      data: { kycStatus: parsed.data.kycStatus },
+      select: { id: true, fullName: true, email: true, kycStatus: true, status: true },
+    })
+    return json({ data: updated })
   }
 
   // Approve / suspend trading for a user (also accepts PATCH)

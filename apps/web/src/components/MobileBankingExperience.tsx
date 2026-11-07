@@ -747,7 +747,7 @@ function ProfileTradingMenu({
         <MenuRow label="Deposit / Wallet" onClick={() => onNavigate('wallet')} />
         <MenuRow label="Settings" onClick={() => onNavigate('settings')} />
         <MenuRow label="Notifications" onClick={() => onNavigate('notifications')} />
-        <MenuRow label="Documents & reports" onClick={() => onNavigate('documents')} />
+        <MenuRow label="KYC / Documents" onClick={() => onNavigate('documents')} />
         <MenuRow label="Support chat" onClick={() => onNavigate('chat')} />
         {isAdmin && (
           <a

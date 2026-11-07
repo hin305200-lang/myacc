@@ -17,6 +17,14 @@ model User {
   phoneNumber     String?
   role            String          @default("USER")
   status          String          @default("PENDING")
+  /// REQUIRED | SUBMITTED | APPROVED | REJECTED
+  kycStatus       String          @default("REQUIRED")
+  dateOfBirth     String?
+  address         String?
+  country         String?
+  nationality     String?
+  idType          String?
+  idNumber        String?
   balance         Decimal         @default(0)
   credit          Decimal         @default(0)
   equity          Decimal         @default(0)
@@ -33,6 +41,22 @@ model User {
   withdrawalRequests WithdrawalRequest[]
   favorites       UserFavorite[]
   messages        Message[]
+  kycDocuments    KycDocument[]
+}
+
+model KycDocument {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// PASSPORT | NATIONAL_ID | DRIVING_LICENSE
+  docType    String
+  fileName   String
+  mimeType   String
+  /// Base64 payload (images/PDF). Size capped in API.
+  dataBase64 String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Position {

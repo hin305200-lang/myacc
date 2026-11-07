@@ -96,6 +96,22 @@ export const apiClient = {
     }
     return res.json()
   },
+
+  async patch<T>(path: string, body: unknown, token?: string): Promise<T> {
+    const res = await fetch(buildUrl(path), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}))
+      throw new Error(error.error ?? 'Request failed')
+    }
+    return res.json()
+  },
 }
 
 export type ApiResponse<T> = { data: T }

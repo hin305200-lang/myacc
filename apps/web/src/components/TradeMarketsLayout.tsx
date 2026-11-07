@@ -69,7 +69,7 @@ export default function TradeMarketsLayout({
     { id: 'profile', icon: User, label: 'Profile' },
     { id: 'settings', icon: Settings, label: 'Settings' },
     { id: 'notifications', icon: Bell, label: 'Notifications' },
-    { id: 'reports', icon: FileText, label: 'Documents' },
+    { id: 'reports', icon: FileText, label: 'KYC / Documents' },
     { id: 'chat', icon: MessageSquare, label: 'Chat' },
     { id: 'tasks', icon: CheckSquare, label: 'Tasks' },
     { id: 'refresh', icon: RefreshCw, label: 'Refresh' },

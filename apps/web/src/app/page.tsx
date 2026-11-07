@@ -298,7 +298,13 @@ export default function TradingPlatform() {
     ;(async () => {
       try {
         const me = await apiClient.get<{
-          user: { userId: string; email: string; role: string; status?: string }
+          user: {
+            userId: string
+            email: string
+            role: string
+            status?: string
+            kycStatus?: string
+          }
         }>('/auth/me', accessToken)
         if (cancelled || !me?.user) return
         const role = String(me.user.role || 'USER').toUpperCase() as 'USER' | 'ADMIN'
@@ -308,6 +314,7 @@ export default function TradingPlatform() {
             email: me.user.email,
             role,
             status: me.user.status,
+            kycStatus: me.user.kycStatus,
           },
           accessToken,
           refreshToken: useAuthStore.getState().refreshToken || accessToken,
@@ -556,8 +563,17 @@ export default function TradingPlatform() {
               </div>
             </div>
             {accessToken && !canTrade && (
-              <div className="border-t border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-center text-sm text-yellow-100">
-                Account pending admin approval — open Chat to message support. You cannot open or close trades until approved.
+              <div className="border-t border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-center text-sm text-yellow-100 flex flex-col sm:flex-row items-center justify-center gap-2">
+                <span>
+                  Complete KYC (Documents) and wait for admin approval — trading stays locked until then.
+                </span>
+                <button
+                  type="button"
+                  className="px-3 py-1 rounded bg-[#6366f1] text-white text-xs font-semibold"
+                  onClick={() => setActivePage('reports')}
+                >
+                  Open KYC / Documents
+                </button>
               </div>
             )}
           </>
