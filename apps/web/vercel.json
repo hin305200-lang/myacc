@@ -6,6 +6,6 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "auth-db-live"
+    "REDEPLOY_STAMP": "admin-hooks-fix-20261108"
   }
 }

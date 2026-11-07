@@ -365,7 +365,7 @@ export default function AdminDashboard() {
               {deposits?.map((req) => (
                 <div key={req.id} className="border border-[#1e293b] rounded-lg p-3 text-sm">
                   <div className="flex justify-between">
-                    <span>{req.user.fullName}</span>
+                    <span>{req.user?.fullName ?? req.userId ?? 'User'}</span>
                     <span className="font-mono">${Number(req.amount).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-[#94a3b8] mt-1">
