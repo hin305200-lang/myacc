@@ -400,18 +400,41 @@ export async function placeMarketOrder(
     }
   }
 
-  const available = Number(user.freeMargin)
-  if (available < marginRequired) {
-    throw new Error(
-      `Insufficient free margin. Required: $${roundMoney(marginRequired).toFixed(2)}, Available: $${roundMoney(available).toFixed(2)}`
-    )
-  }
-
   const commission = roundMoney(calculateCommission(symbol, input.lotSize, price))
-  const newBalance = roundMoney(Number(user.balance) - commission)
+  const marginUsed = roundMoney(marginRequired)
 
-  const [position] = await prisma.$transaction([
-    prisma.position.create({
+  // Serialize opens per user so a double-click / parallel request cannot open two fills.
+  const position = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`
+
+    const lockedUser = await tx.user.findUnique({ where: { id: userId } })
+    if (!lockedUser) throw new Error('User not found')
+    if (lockedUser.status !== 'ACTIVE') {
+      throw new Error('Account is not active. Please wait for admin approval before trading.')
+    }
+
+    const openPositions = await tx.position.findMany({
+      where: { userId, status: 'OPEN' },
+      select: { marginUsed: true, profit: true },
+    })
+    let usedMargin = 0
+    let floating = 0
+    for (const pos of openPositions) {
+      usedMargin += Number(pos.marginUsed)
+      floating += Number(pos.profit)
+    }
+    const balance = Number(lockedUser.balance)
+    const credit = Number((lockedUser as any).credit ?? 0)
+    const equity = roundMoney(balance + credit + floating)
+    const available = roundMoney(equity - usedMargin)
+    if (available < marginRequired) {
+      throw new Error(
+        `Insufficient free margin. Required: $${marginUsed.toFixed(2)}, Available: $${available.toFixed(2)}`
+      )
+    }
+
+    const newBalance = roundMoney(balance - commission)
+    const created = await tx.position.create({
       data: {
         userId,
         symbol,
@@ -421,31 +444,30 @@ export async function placeMarketOrder(
         currentPrice: price,
         stopLoss: input.stopLoss,
         takeProfit: input.takeProfit,
-        marginUsed: roundMoney(marginRequired),
+        marginUsed,
         commission,
         profit: 0,
         status: 'OPEN',
       },
-    }),
-    prisma.user.update({
+    })
+    await tx.user.update({
       where: { id: userId },
       data: { balance: newBalance },
-    }),
-    ...(commission !== 0
-      ? [
-          prisma.transaction.create({
-            data: {
-              userId,
-              type: 'ADJUSTMENT',
-              amount: -commission,
-              balanceBefore: Number(user.balance),
-              balanceAfter: newBalance,
-              note: `Commission ${symbol} ${input.side} ${input.lotSize} lot`,
-            },
-          }),
-        ]
-      : []),
-  ])
+    })
+    if (commission !== 0) {
+      await tx.transaction.create({
+        data: {
+          userId,
+          type: 'ADJUSTMENT',
+          amount: -commission,
+          balanceBefore: balance,
+          balanceAfter: newBalance,
+          note: `Commission ${symbol} ${input.side} ${input.lotSize} lot`,
+        },
+      })
+    }
+    return created
+  })
 
   // Fast local totals (no second full market sweep)
   const account = await applyAccountTotals(userId)

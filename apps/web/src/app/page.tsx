@@ -94,6 +94,7 @@ export default function TradingPlatform() {
   const [activeTab, setActiveTab] = useState<'chart' | 'positions'>('chart')
   const [authAttempted, setAuthAttempted] = useState(false)
   const [tradeLoading, setTradeLoading] = useState(false)
+  const tradeInFlightRef = useRef(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [showNews, setShowNews] = useState(false)
@@ -375,7 +376,7 @@ export default function TradingPlatform() {
   }
 
   const handleTrade = async (side: 'BUY' | 'SELL', stopLoss?: number, takeProfit?: number) => {
-    if (!selectedSymbol || !accessToken || tradeLoading) {
+    if (!selectedSymbol || !accessToken || tradeLoading || tradeInFlightRef.current) {
       return
     }
     if (!canTrade) {
@@ -385,6 +386,7 @@ export default function TradingPlatform() {
       })
       return
     }
+    tradeInFlightRef.current = true
     setTradeLoading(true)
     try {
       const response = await apiClient.post<{ data: any; account?: any }>(
@@ -413,7 +415,8 @@ export default function TradingPlatform() {
             profit: Number(row.profit ?? 0),
             openedAt: row.openedAt || new Date().toISOString(),
           }
-          return [mapped, ...(prev || [])]
+          const rest = (prev || []).filter((p) => p.id !== mapped.id)
+          return [mapped, ...rest]
         })
       }
       setIsMobileTradeOpen(false)
@@ -429,6 +432,7 @@ export default function TradingPlatform() {
         'Trade execution failed. Please check your balance and try again.'
       setToast({ message: errorMessage, type: 'error' })
     } finally {
+      tradeInFlightRef.current = false
       setTradeLoading(false)
     }
   }

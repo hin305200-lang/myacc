@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TrendingUp, TrendingDown, Shield } from 'lucide-react'
 import { contractSize } from '@/lib/contract-sizes'
 
@@ -40,13 +40,19 @@ export default function OrderPanel({
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
   const [tradeSuccess, setTradeSuccess] = useState<'BUY' | 'SELL' | null>(null)
+  const submittingRef = useRef(false)
   const marketClosed = Boolean(symbol && symbol.marketStatus && symbol.marketStatus !== 'open')
-  const buttonsDisabled = tradeLoading || tradingLocked || marketClosed || symbol?.tradable === false
+  const buttonsDisabled =
+    tradeLoading || submittingRef.current || tradingLocked || marketClosed || symbol?.tradable === false
   const estimatedMargin = useMemo(() => {
     if (!symbol) return 0
     const lev = Math.max(1, leverage)
     return (lotSize * contractSize(symbol.symbol) * symbol.ask) / lev
   }, [symbol, lotSize, leverage])
+
+  useEffect(() => {
+    if (!tradeLoading) submittingRef.current = false
+  }, [tradeLoading])
 
   if (!symbol) {
     return (
@@ -68,14 +74,15 @@ export default function OrderPanel({
     return price.toFixed(5)
   }
 
-  const handleTrade = async (side: 'BUY' | 'SELL') => {
+  const handleTrade = (side: 'BUY' | 'SELL') => {
+    if (tradeLoading || tradingLocked || marketClosed || symbol?.tradable === false || submittingRef.current) {
+      return
+    }
+    submittingRef.current = true
     const sl = stopLoss ? parseFloat(stopLoss) : undefined
     const tp = takeProfit ? parseFloat(takeProfit) : undefined
-    
-    // Show success animation
     setTradeSuccess(side)
     setTimeout(() => setTradeSuccess(null), 2000)
-    
     onTrade(side, sl, tp)
     setStopLoss('')
     setTakeProfit('')
