@@ -5,6 +5,7 @@ import { User, ChevronDown } from 'lucide-react'
 interface HeaderProps {
   account: {
     balance: number
+    credit?: number
     equity: number
     freeMargin: number
     margin: number
@@ -48,17 +49,18 @@ export default function Header({ account, currentTime, onOpenProfile, onOpenChat
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — Balance / Credit / Equity / Free Margin / Margin / Margin Level / Floating P/L */}
       <div className="flex items-center gap-6">
         <StatItem label="BALANCE" value={account.balance} currency="USD" />
+        <StatItem label="CREDIT" value={account.credit ?? 0} currency="USD" />
         <StatItem label="EQUITY" value={account.equity} currency="USD" />
-        <StatItem label="FREE FUNDS" value={account.freeMargin} />
+        <StatItem label="FREE MARGIN" value={account.freeMargin} currency="USD" />
         <StatItem label="MARGIN" value={account.margin} currency="USD" />
         <StatItem label="MARGIN LEVEL" value={account.marginLevel} suffix="%" />
         
-        {/* Profit Box */}
+        {/* Floating P/L */}
         <div className="px-4 py-2 bg-accent-cyan/10 border border-accent-cyan rounded-md">
-          <div className="text-[10px] text-[#64748b] uppercase tracking-wide">Profit</div>
+          <div className="text-[10px] text-[#64748b] uppercase tracking-wide">Floating P/L</div>
           <div className="text-accent-cyan font-bold font-mono">
             {(account.profit ?? 0).toFixed(2)} <span className="text-xs font-normal">USD</span>
           </div>

@@ -299,10 +299,12 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
     return json({
       data: {
         balance: Number(user.balance),
+        credit: Number((user as any).credit ?? 0),
         equity: Number(user.equity),
         freeMargin: Number(user.freeMargin),
         margin: Number(user.margin),
         marginLevel: Number(user.marginLevel),
+        leverage: user.leverage || 10,
         invested,
         unrealizedPnl: unrealized,
         dailyRealizedPnl: realizedToday,
@@ -641,8 +643,12 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
         email: true,
         role: true,
         balance: true,
+        credit: true,
         equity: true,
+        margin: true,
         freeMargin: true,
+        marginLevel: true,
+        leverage: true,
         status: true,
         createdAt: true,
       },
@@ -652,19 +658,30 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
       data: users.map((u) => ({
         ...u,
         balance: Number(u.balance),
+        credit: Number(u.credit),
         equity: Number(u.equity),
+        margin: Number(u.margin),
         freeMargin: Number(u.freeMargin),
+        marginLevel: Number(u.marginLevel),
+        leverage: u.leverage || 10,
       })),
     })
   }
 
-  // Approve / suspend trading for a user
-  if (req.method === 'POST' && parts[1] === 'users' && parts[2] && parts[3] === 'status') {
+  // Approve / suspend trading for a user (also accepts PATCH)
+  if (
+    (req.method === 'POST' || req.method === 'PATCH') &&
+    parts[1] === 'users' &&
+    parts[2] &&
+    parts[3] === 'status'
+  ) {
     const body = await readJsonBody(req)
     const parsed = z
       .object({
         status: z.enum(['ACTIVE', 'PENDING', 'SUSPENDED']),
         startingBalance: z.number().min(0).optional(),
+        /** Broker Credit / bonus — separate from Balance */
+        credit: z.number().min(0).optional(),
       })
       .safeParse(body)
     if (!parsed.success) return json({ error: 'Invalid status' }, 400)
@@ -673,16 +690,18 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
     if (!user) return json({ error: 'User not found' }, 404)
 
     const becomingActive = parsed.data.status === 'ACTIVE' && user.status !== 'ACTIVE'
-    const credit = becomingActive ? parsed.data.startingBalance ?? 350 : 0
+    // Starting funds go into Balance (settled cash), not broker Credit.
+    const startingDeposit = becomingActive ? parsed.data.startingBalance ?? 350 : 0
 
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: {
         status: parsed.data.status,
         leverage: 10,
-        ...(credit > 0
+        ...(typeof parsed.data.credit === 'number' ? { credit: parsed.data.credit } : {}),
+        ...(startingDeposit > 0
           ? {
-              balance: Number(user.balance) + credit,
+              balance: Number(user.balance) + startingDeposit,
               // Equity / free margin refreshed below via recalculateAccount
               margin: 0,
               marginLevel: 0,
@@ -704,14 +723,14 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
       },
     })
 
-    if (credit > 0) {
+    if (startingDeposit > 0) {
       await prisma.transaction.create({
         data: {
           userId: user.id,
           type: 'DEPOSIT',
-          amount: credit,
+          amount: startingDeposit,
           balanceBefore: Number(user.balance),
-          balanceAfter: Number(user.balance) + credit,
+          balanceAfter: Number(user.balance) + startingDeposit,
           note: 'Admin approved account — starting balance',
         },
       })
