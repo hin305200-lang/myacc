@@ -542,6 +542,18 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
             }
           : {}),
       },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        status: true,
+        balance: true,
+        equity: true,
+        freeMargin: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     })
 
     if (credit > 0) {
