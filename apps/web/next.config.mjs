@@ -1,20 +1,17 @@
 /** @type {import('next').NextConfig} */
-const apiProxyTarget = process.env.API_PROXY_TARGET?.replace(/\/$/, '')
-
 const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  async rewrites() {
-    if (!apiProxyTarget) {
-      return []
-    }
-    return [
-      {
-        source: '/backend/:path*',
-        destination: `${apiProxyTarget}/:path*`,
-      },
-    ]
+  // Ensure Prisma query engine binaries are included in the /backend serverless function.
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
+    outputFileTracingIncludes: {
+      '/backend/**/*': [
+        './node_modules/.prisma/client/**/*',
+        './node_modules/@prisma/client/**/*',
+      ],
+    },
   },
 }
 
