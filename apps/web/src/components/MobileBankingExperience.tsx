@@ -737,6 +737,7 @@ function ProfileTradingMenu({
   isAuthenticated: boolean
   onLogin?: () => void
 }) {
+  const isAdmin = useAuthStore((s) => s.user?.role === 'ADMIN')
   return (
     <div className="space-y-3 pb-4">
       <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#111538]">
@@ -748,6 +749,15 @@ function ProfileTradingMenu({
         <MenuRow label="Notifications" onClick={() => onNavigate('notifications')} />
         <MenuRow label="Documents & reports" onClick={() => onNavigate('documents')} />
         <MenuRow label="Support chat" onClick={() => onNavigate('chat')} />
+        {isAdmin && (
+          <a
+            href="/admin"
+            className="flex w-full items-center justify-between border-t border-[#1e293b] px-4 py-3.5 text-left text-sm text-[#a5b4fc]"
+          >
+            <span>Admin — approve accounts</span>
+            <span className="text-[#64748b]">→</span>
+          </a>
+        )}
       </div>
       {isAuthenticated ? (
         <button

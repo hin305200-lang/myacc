@@ -169,30 +169,39 @@ export default function ChatPage() {
               <p className="text-[#94a3b8]">No messages yet. Start the conversation!</p>
             </div>
           ) : (
-            messages.map((msg) => (
+            messages.map((msg) => {
+              const mine =
+                (isAdmin && msg.fromRole === 'ADMIN') || (!isAdmin && msg.fromRole === 'USER')
+              return (
               <div
                 key={msg.id}
-                className={`flex ${msg.fromRole === 'ADMIN' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
               >
                 <div
                   className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                    msg.fromRole === 'ADMIN'
+                    mine
                       ? 'bg-[#6366f1] text-white'
                       : 'bg-[#161b3d] border border-[#1e293b] text-white'
-                  }`}
+                  } ${msg.pending ? 'opacity-70' : ''}`}
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-semibold">
-                      {msg.fromRole === 'ADMIN' ? 'Admin' : 'You'}
+                      {msg.fromRole === 'ADMIN' ? (isAdmin ? 'You' : 'Admin') : isAdmin ? 'User' : 'You'}
                     </span>
                     <span className="text-[10px] opacity-70">
-                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {msg.pending
+                        ? 'Sending…'
+                        : new Date(msg.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                     </span>
                   </div>
                   <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
                 </div>
               </div>
-            ))
+              )
+            })
           )}
           <div ref={messagesEndRef} />
         </div>

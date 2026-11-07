@@ -96,23 +96,35 @@ export default function AdminDashboard() {
             <p className="text-sm text-[#94a3b8]">Administrator</p>
             <h1 className="text-2xl font-semibold">Control Center</h1>
             <p className="text-xs text-[#94a3b8] mt-1">
-              Approve accounts here only. Trading stays locked until you approve.
+              Approve new accounts in the table below (Status = PENDING → Approve trading).
             </p>
           </div>
-          <button
-            onClick={() => refetch()}
-            className="px-4 py-2 rounded-lg bg-bg-panel border border-[#1e293b] hover:border-accent-purple transition-colors"
-          >
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <a
+              href="#account-approvals"
+              className="px-4 py-2 rounded-lg bg-[#6366f1]/20 border border-[#6366f1]/40 text-[#a5b4fc] text-sm hover:bg-[#6366f1]/30"
+            >
+              Jump to approvals
+            </a>
+            <button
+              onClick={() => refetch()}
+              className="px-4 py-2 rounded-lg bg-bg-panel border border-[#1e293b] hover:border-accent-purple transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
         </header>
 
-        <section className="bg-bg-panel border border-[#1e293b] rounded-xl overflow-hidden">
+        <section
+          id="account-approvals"
+          className="bg-bg-panel border border-[#1e293b] rounded-xl overflow-hidden scroll-mt-6"
+        >
           <div className="p-4 border-b border-[#1e293b] flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">Account approvals</h2>
               <p className="text-xs text-[#94a3b8]">
-                New users are PENDING. Approve trading only from this page.
+                Find PENDING users → click <span className="text-green-300">Approve trading</span> (adds $350
+                balance).
               </p>
             </div>
             {isLoading && <span className="text-xs text-[#94a3b8]">Loading...</span>}
@@ -134,7 +146,13 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {data?.map((u) => (
+                {[...(data ?? [])]
+                  .sort((a, b) => {
+                    const rank = (s: string) =>
+                      s === 'PENDING' ? 0 : s === 'ACTIVE' ? 1 : 2
+                    return rank(a.status) - rank(b.status)
+                  })
+                  .map((u) => (
                   <tr key={u.id} className="border-t border-[#1e293b]">
                     <td className="px-4 py-3 font-medium">{u.fullName}</td>
                     <td className="px-4 py-3 text-[#94a3b8]">{u.email}</td>

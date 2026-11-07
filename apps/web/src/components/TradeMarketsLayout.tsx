@@ -15,7 +15,9 @@ import {
   LogOut,
   ChevronDown,
   User,
+  Shield,
 } from 'lucide-react'
+import { useAuthStore } from '@/stores/auth-store'
 
 interface TradeMarketsLayoutProps {
   children: React.ReactNode
@@ -55,6 +57,7 @@ export default function TradeMarketsLayout({
   onPageChange,
 }: TradeMarketsLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const isAdmin = useAuthStore((s) => s.user?.role === 'ADMIN')
   const money = (value: number) => (userId ? `$${formatCurrency(value)}` : '—')
   const accountLabel = userId
     ? `${userId.slice(0, 5).toUpperCase()} — LIVE (USD)`
@@ -149,6 +152,16 @@ export default function TradeMarketsLayout({
         </div>
 
         <div className="relative flex items-center gap-2 shrink-0">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-[#6366f1]/40 bg-[#6366f1]/15 text-[11px] font-semibold text-[#a5b4fc] hover:bg-[#6366f1]/25"
+              title="Approve accounts & chat inbox"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              Admin
+            </Link>
+          )}
           {userId ? (
             <button
               type="button"
@@ -191,6 +204,16 @@ export default function TradeMarketsLayout({
                     </button>
                   )
                 })}
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full px-3 py-2 flex items-center gap-2 text-left text-xs text-[#a5b4fc] hover:bg-[#1e293b] border-t border-[#1e293b] mt-1"
+                  >
+                    <Shield className="h-3.5 w-3.5" />
+                    Admin — approve accounts
+                  </Link>
+                )}
                 {onLogout && (
                   <button
                     type="button"

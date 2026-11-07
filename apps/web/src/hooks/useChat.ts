@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/auth-store'
-import { useSharedSocket } from './useMarketData'
 
 export type ChatMessage = {
   id: string
@@ -17,15 +16,55 @@ export type ChatMessage = {
   userName?: string
   userEmail?: string
   userStatus?: string
+  pending?: boolean
 }
 
 export type ChatThreadPreview = ChatMessage
+
+const POLL_MS = 800
+
+function upsertMessage(list: ChatMessage[] | undefined, msg: ChatMessage): ChatMessage[] {
+  const prev = list ?? []
+  if (prev.some((m) => m.id === msg.id)) {
+    return prev.map((m) => (m.id === msg.id ? { ...m, ...msg, pending: false } : m))
+  }
+  // Replace optimistic temp message with the real one (same content, near time)
+  const withoutTemp = prev.filter(
+    (m) =>
+      !(
+        m.pending &&
+        m.content === msg.content &&
+        m.fromRole === msg.fromRole &&
+        m.userId === msg.userId
+      )
+  )
+  return [...withoutTemp, msg]
+}
+
+/** Keep local "Sending…" bubbles until the server row arrives */
+function mergeWithPending(
+  server: ChatMessage[],
+  cached: ChatMessage[] | undefined
+): ChatMessage[] {
+  const pending = (cached ?? []).filter((m) => m.pending)
+  if (pending.length === 0) return server
+  const extras = pending.filter(
+    (p) =>
+      !server.some(
+        (s) =>
+          s.content === p.content &&
+          s.fromRole === p.fromRole &&
+          s.userId === p.userId &&
+          Math.abs(new Date(s.createdAt).getTime() - new Date(p.createdAt).getTime()) < 60_000
+      )
+  )
+  return extras.length ? [...server, ...extras] : server
+}
 
 export const useChat = () => {
   const token = useAuthStore((s) => s.accessToken)
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
-  const socket = useSharedSocket()
   const isAdmin = user?.role === 'ADMIN'
 
   const threadsQuery = useQuery({
@@ -35,26 +74,37 @@ export const useChat = () => {
       return res.data
     },
     enabled: !!token,
+    refetchInterval: POLL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
   })
 
   const [activeUserId, setActiveUserId] = useState<string | null>(null)
 
+  const threadKeyUserId = isAdmin ? activeUserId : user?.userId ?? null
+
   const threadQuery = useQuery({
-    queryKey: ['chat-thread', activeUserId],
+    queryKey: ['chat-thread', threadKeyUserId],
     queryFn: async () => {
-      if (!activeUserId) return []
-      if (!isAdmin && activeUserId !== user?.userId) return []
-      // admin fetch specific, user uses threads result
+      let server: ChatMessage[] = []
       if (isAdmin) {
-        const res = await apiClient.get<{ data: ChatMessage[] }>(`/chat/thread/${activeUserId}`, token ?? undefined)
-        return res.data
+        if (!activeUserId) return []
+        const res = await apiClient.get<{ data: ChatMessage[] }>(
+          `/chat/thread/${activeUserId}`,
+          token ?? undefined
+        )
+        server = res.data
+      } else {
+        const res = await apiClient.get<{ data: ChatMessage[] }>('/chat/threads', token ?? undefined)
+        server = res.data
       }
-      // For users, fetch their own thread
-      const res = await apiClient.get<{ data: ChatMessage[] }>('/chat/threads', token ?? undefined)
-      return res.data
+      const cached = queryClient.getQueryData<ChatMessage[]>(['chat-thread', threadKeyUserId])
+      return mergeWithPending(server, cached)
     },
-    enabled: !!token && (!!activeUserId || !isAdmin),
-    refetchInterval: 2000, // Refetch every 2 seconds for real-time updates
+    enabled: !!token && !!threadKeyUserId,
+    refetchInterval: POLL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
   })
 
   useEffect(() => {
@@ -63,56 +113,98 @@ export const useChat = () => {
     }
   }, [isAdmin, user?.userId])
 
-  useEffect(() => {
-    if (!socket) return
-    const handler = (msg: ChatMessage) => {
-      if (isAdmin) {
-        queryClient.invalidateQueries({ queryKey: ['chat-threads'] })
-        if (activeUserId === msg.userId) {
-          queryClient.invalidateQueries({ queryKey: ['chat-thread', activeUserId] })
-        }
-      } else if (msg.userId === user?.userId) {
-        queryClient.invalidateQueries({ queryKey: ['chat-threads'] })
-        queryClient.invalidateQueries({ queryKey: ['chat-thread', user.userId] })
+  const patchThreadCache = (userId: string, msg: ChatMessage) => {
+    const key = ['chat-thread', userId]
+    queryClient.setQueryData<ChatMessage[]>(key, (old) => upsertMessage(old, msg))
+  }
+
+  const patchThreadsPreview = (msg: ChatMessage) => {
+    queryClient.setQueryData<ChatThreadPreview[]>(['chat-threads'], (old) => {
+      if (!isAdmin) {
+        // User view stores full thread in this key too
+        return upsertMessage(old as ChatMessage[] | undefined, msg) as ChatThreadPreview[]
       }
-    }
-    socket.on('chat:new', handler)
-    socket.on('chat:new-admin', handler)
-    return () => {
-      socket.off('chat:new', handler)
-      socket.off('chat:new-admin', handler)
-    }
-  }, [socket, isAdmin, user?.userId, activeUserId, queryClient])
+      const prev = old ?? []
+      const rest = prev.filter((t) => t.userId !== msg.userId)
+      const existing = prev.find((t) => t.userId === msg.userId)
+      return [
+        {
+          ...msg,
+          userName: existing?.userName ?? msg.userName,
+          userEmail: existing?.userEmail ?? msg.userEmail,
+          userStatus: existing?.userStatus ?? msg.userStatus,
+        },
+        ...rest,
+      ]
+    })
+  }
 
   const sendUserMutation = useMutation({
     mutationFn: async (content: string) => {
       const res = await apiClient.post<{ data: ChatMessage }>('/chat/send', { content }, token ?? undefined)
       return res.data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-threads'] })
-      if (!isAdmin && user?.userId) {
-        queryClient.invalidateQueries({ queryKey: ['chat-thread', user.userId] })
+    onMutate: async (content) => {
+      if (!user?.userId) return
+      const optimistic: ChatMessage = {
+        id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        userId: user.userId,
+        fromRole: 'USER',
+        content,
+        createdAt: new Date().toISOString(),
+        pending: true,
       }
-      // Refetch immediately for real-time feel
-      setTimeout(() => {
-        queryClient.refetchQueries({ queryKey: ['chat-thread', activeUserId] })
-      }, 100)
+      await queryClient.cancelQueries({ queryKey: ['chat-thread', user.userId] })
+      patchThreadCache(user.userId, optimistic)
+      patchThreadsPreview(optimistic)
+      return { optimisticId: optimistic.id }
+    },
+    onSuccess: (msg) => {
+      if (!user?.userId) return
+      patchThreadCache(user.userId, { ...msg, pending: false })
+      patchThreadsPreview({ ...msg, pending: false })
+    },
+    onError: (_err, _content, ctx) => {
+      if (!user?.userId || !ctx?.optimisticId) return
+      queryClient.setQueryData<ChatMessage[]>(['chat-thread', user.userId], (old) =>
+        (old ?? []).filter((m) => m.id !== ctx.optimisticId)
+      )
     },
   })
 
   const sendAdminMutation = useMutation({
     mutationFn: async ({ userId, content }: { userId: string; content: string }) => {
-      const res = await apiClient.post<{ data: ChatMessage }>('/chat/send-admin', { userId, content }, token ?? undefined)
+      const res = await apiClient.post<{ data: ChatMessage }>(
+        '/chat/send-admin',
+        { userId, content },
+        token ?? undefined
+      )
       return res.data
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['chat-threads'] })
-      queryClient.invalidateQueries({ queryKey: ['chat-thread', variables.userId] })
-      // Refetch immediately for real-time feel
-      setTimeout(() => {
-        queryClient.refetchQueries({ queryKey: ['chat-thread', variables.userId] })
-      }, 100)
+    onMutate: async ({ userId, content }) => {
+      const optimistic: ChatMessage = {
+        id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        userId,
+        adminId: user?.userId,
+        fromRole: 'ADMIN',
+        content,
+        createdAt: new Date().toISOString(),
+        pending: true,
+      }
+      await queryClient.cancelQueries({ queryKey: ['chat-thread', userId] })
+      patchThreadCache(userId, optimistic)
+      patchThreadsPreview(optimistic)
+      return { optimisticId: optimistic.id, userId }
+    },
+    onSuccess: (msg, variables) => {
+      patchThreadCache(variables.userId, { ...msg, pending: false })
+      patchThreadsPreview({ ...msg, pending: false })
+    },
+    onError: (_err, variables, ctx) => {
+      if (!ctx?.optimisticId) return
+      queryClient.setQueryData<ChatMessage[]>(['chat-thread', variables.userId], (old) =>
+        (old ?? []).filter((m) => m.id !== ctx.optimisticId)
+      )
     },
   })
 
@@ -121,10 +213,17 @@ export const useChat = () => {
       await apiClient.post('/chat/read', { userId }, token ?? undefined)
     },
     onSuccess: (_data, userId) => {
+      queryClient.setQueryData<ChatMessage[]>(['chat-thread', userId], (old) =>
+        (old ?? []).map((m) =>
+          !m.readAt &&
+          ((isAdmin && m.fromRole === 'USER') || (!isAdmin && m.fromRole === 'ADMIN'))
+            ? { ...m, readAt: new Date().toISOString() }
+            : m
+        )
+      )
       if (isAdmin) {
-        queryClient.invalidateQueries({ queryKey: ['chat-threads'] })
+        void queryClient.invalidateQueries({ queryKey: ['chat-threads'] })
       }
-      queryClient.invalidateQueries({ queryKey: ['chat-thread', userId] })
     },
   })
 
@@ -138,8 +237,8 @@ export const useChat = () => {
     messagesLoading: threadQuery.isLoading,
     sendMessage: sendUserMutation.mutateAsync,
     sendAdminMessage: sendAdminMutation.mutateAsync,
-    sending: sendUserMutation.isPending || sendAdminMutation.isPending,
+    // Don't block the input while a previous send is in flight — optimistic UI covers it
+    sending: false,
     markRead: markRead.mutateAsync,
   }
 }
-
