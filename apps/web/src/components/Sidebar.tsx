@@ -250,24 +250,28 @@ export default function Sidebar({
 
               <div className="text-center">
                 <div className="text-[10px] text-slate-400 mb-1">LOT / VOLUME</div>
-                <div className="flex items-center justify-center gap-1">
+                <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-2 max-w-[200px] mx-auto">
                   <button
-                    onClick={() => onLotSizeChange(Math.max(0.01, lotSize - 0.01))}
-                    className="w-7 h-7 rounded border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:border-accent-purple"
+                    type="button"
+                    aria-label="Decrease lot size"
+                    onClick={() => onLotSizeChange(Math.max(0.01, Number((lotSize - 0.01).toFixed(2))))}
+                    className="h-9 w-10 shrink-0 rounded border border-white/10 bg-white/5 text-white hover:border-accent-purple"
                   >
-                    -
+                    −
                   </button>
                   <input
                     type="number"
                     value={lotSize}
                     onChange={(e) => onLotSizeChange(parseFloat(e.target.value) || 0.01)}
-                    className="w-20 py-1 rounded border border-white/10 bg-white/5 text-center text-sm font-mono focus:outline-none focus:border-accent-purple"
+                    className="w-full min-w-0 h-9 rounded border border-white/10 bg-white/5 text-center text-sm font-mono focus:outline-none focus:border-accent-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     step="0.01"
                     min="0.01"
                   />
                   <button
-                    onClick={() => onLotSizeChange(lotSize + 0.01)}
-                    className="w-7 h-7 rounded border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:border-accent-purple"
+                    type="button"
+                    aria-label="Increase lot size"
+                    onClick={() => onLotSizeChange(Number((lotSize + 0.01).toFixed(2)))}
+                    className="h-9 w-10 shrink-0 rounded bg-[#6366f1] border border-[#6366f1] text-white hover:bg-[#4f46e5]"
                   >
                     +
                   </button>
@@ -585,25 +589,35 @@ function TradeCard({
             {/* Lot Size */}
             <div className="text-center">
               <div className="text-[10px] text-slate-400 mb-1">LOT / VOLUME</div>
-              <div className="flex items-center justify-center gap-1">
+              <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-2 max-w-[200px] mx-auto">
                 <button
-                  onClick={(e) => { e.stopPropagation(); onLotSizeChange(Math.max(0.01, lotSize - 0.01)); }}
-                  className="w-6 h-6 rounded border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:border-accent-purple"
+                  type="button"
+                  aria-label="Decrease lot size"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onLotSizeChange(Math.max(0.01, Number((lotSize - 0.01).toFixed(2))))
+                  }}
+                  className="h-9 w-10 shrink-0 rounded border border-white/10 bg-white/5 text-white hover:border-accent-purple"
                 >
-                  -
+                  −
                 </button>
                 <input
                   type="number"
                   value={lotSize}
                   onChange={(e) => onLotSizeChange(parseFloat(e.target.value) || 0.01)}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-20 py-1.5 rounded border border-white/10 bg-white/5 text-center text-sm font-mono focus:outline-none focus:border-accent-purple"
+                  className="w-full min-w-0 h-9 rounded border border-white/10 bg-white/5 text-center text-sm font-mono focus:outline-none focus:border-accent-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   step="0.01"
                   min="0.01"
                 />
                 <button
-                  onClick={(e) => { e.stopPropagation(); onLotSizeChange(lotSize + 0.01); }}
-                  className="w-6 h-6 rounded border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:border-accent-purple"
+                  type="button"
+                  aria-label="Increase lot size"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onLotSizeChange(Number((lotSize + 0.01).toFixed(2)))
+                  }}
+                  className="h-9 w-10 shrink-0 rounded bg-[#6366f1] border border-[#6366f1] text-white hover:bg-[#4f46e5]"
                 >
                   +
                 </button>

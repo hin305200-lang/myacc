@@ -99,10 +99,12 @@ export default function MobileTradePanel({
           {/* Volume */}
           <div className="mb-4">
             <label className="block text-xs text-[#64748b] uppercase mb-2">Volume (Lots)</label>
-            <div className="flex items-center gap-3">
+            <div className="grid grid-cols-[52px_minmax(0,1fr)_52px] items-center gap-3">
               <button
-                onClick={() => onLotSizeChange(Math.max(0.01, lotSize - 0.01))}
-                className="w-12 h-12 rounded-xl bg-bg-card border border-[#1e293b] flex items-center justify-center text-[#64748b] hover:text-white hover:border-accent-purple active:scale-95 transition-all"
+                type="button"
+                aria-label="Decrease lot size"
+                onClick={() => onLotSizeChange(Math.max(0.01, Number((lotSize - 0.01).toFixed(2))))}
+                className="w-[52px] h-12 shrink-0 rounded-xl bg-bg-card border border-[#1e293b] flex items-center justify-center text-white hover:border-accent-purple active:scale-95 transition-all"
               >
                 <Minus size={20} />
               </button>
@@ -110,13 +112,15 @@ export default function MobileTradePanel({
                 type="number"
                 value={lotSize}
                 onChange={(e) => onLotSizeChange(parseFloat(e.target.value) || 0.01)}
-                className="flex-1 h-12 bg-bg-card border border-[#1e293b] rounded-xl text-center text-xl font-mono focus:outline-none focus:border-accent-purple"
+                className="w-full min-w-0 h-12 bg-bg-card border border-[#1e293b] rounded-xl text-center text-xl font-mono focus:outline-none focus:border-accent-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 step="0.01"
                 min="0.01"
               />
               <button
-                onClick={() => onLotSizeChange(lotSize + 0.01)}
-                className="w-12 h-12 rounded-xl bg-bg-card border border-[#1e293b] flex items-center justify-center text-[#64748b] hover:text-white hover:border-accent-purple active:scale-95 transition-all"
+                type="button"
+                aria-label="Increase lot size"
+                onClick={() => onLotSizeChange(Number((lotSize + 0.01).toFixed(2)))}
+                className="w-[52px] h-12 shrink-0 rounded-xl bg-[#6366f1] border border-[#6366f1] flex items-center justify-center text-white hover:bg-[#4f46e5] active:scale-95 transition-all"
               >
                 <Plus size={20} />
               </button>

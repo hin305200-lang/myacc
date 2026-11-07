@@ -537,7 +537,7 @@ export default function TradingPlatform() {
                   </div>
 
                   {/* Right — order ticket (kept, placed like a dealing panel) */}
-                  <div className="w-[280px] xl:w-[300px] flex-shrink-0 border-l border-[#2d3142] bg-[#1a1d2e]">
+                  <div className="w-[300px] xl:w-[320px] flex-shrink-0 border-l border-[#2d3142] bg-[#1a1d2e] overflow-visible">
                     <OrderPanel
                       symbol={selectedSymbol ?? null}
                       lotSize={lotSize}

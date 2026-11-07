@@ -82,7 +82,7 @@ export default function OrderPanel({
   }
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219] relative overflow-hidden">
+    <div className="h-full flex flex-col bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219] relative overflow-x-hidden overflow-y-auto">
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#4f46e5] rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#22d3ee] rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
@@ -121,10 +121,12 @@ export default function OrderPanel({
           <div className="text-xl font-bold text-white font-mono">{formatPrice(symbol.bid)}</div>
         </button>
 
-        <div className="flex items-center gap-2 rounded-lg border border-[#2d3142]/50 bg-[#252836]/50 p-1.5 backdrop-blur-sm">
+        <div className="grid grid-cols-[48px_minmax(0,1fr)_48px] items-center gap-2 rounded-lg border border-[#2d3142]/50 bg-[#252836]/50 p-1.5 backdrop-blur-sm">
           <button
-            onClick={() => onLotSizeChange(Math.max(0.01, lotSize - 0.01))}
-            className="px-3 py-1.5 rounded-lg bg-[#252836] border border-[#2d3142] text-white hover:border-[#6366f1]"
+            type="button"
+            aria-label="Decrease lot size"
+            onClick={() => onLotSizeChange(Math.max(0.01, Number((lotSize - 0.01).toFixed(2))))}
+            className="h-11 w-12 shrink-0 rounded-lg bg-[#252836] border border-[#2d3142] text-xl font-semibold text-white hover:border-[#6366f1]"
           >
             −
           </button>
@@ -132,13 +134,15 @@ export default function OrderPanel({
             type="number"
             value={lotSize}
             onChange={(e) => onLotSizeChange(parseFloat(e.target.value) || 0.01)}
-            className="flex-1 px-2 py-1.5 bg-transparent text-white text-center font-mono focus:outline-none focus:border-[#6366f1]"
+            className="w-full min-w-0 h-11 px-2 bg-transparent text-white text-center font-mono text-base focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             step="0.01"
             min="0.01"
           />
           <button
-            onClick={() => onLotSizeChange(lotSize + 0.01)}
-            className="px-3 py-1.5 rounded-lg bg-[#252836] border border-[#2d3142] text-white hover:border-[#6366f1]"
+            type="button"
+            aria-label="Increase lot size"
+            onClick={() => onLotSizeChange(Number((lotSize + 0.01).toFixed(2)))}
+            className="h-11 w-12 shrink-0 rounded-lg bg-[#6366f1] border border-[#6366f1] text-xl font-semibold text-white hover:bg-[#4f46e5]"
           >
             +
           </button>
