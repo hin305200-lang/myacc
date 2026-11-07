@@ -3,19 +3,19 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  Activity,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Bell,
+  ArrowRight,
+  BarChart3,
   Briefcase,
+  CalendarDays,
+  ChevronDown,
   ChevronRight,
-  LineChart,
+  History,
   LogOut,
-  Radio,
-  TrendingDown,
-  TrendingUp,
+  Menu,
+  Search,
+  Star,
   User,
-  Wallet as WalletIcon,
+  X,
 } from 'lucide-react'
 import MobileTradingView from './MobileTradingView'
 import WalletPage from './WalletPage'
@@ -24,24 +24,23 @@ import SettingsPage from './SettingsPage'
 import NotificationsPage from './NotificationsPage'
 import DocumentsPage from './DocumentsPage'
 import ChatPage from './ChatPage'
-import { useTransactions } from '@/hooks/useMarketData'
-import {
-  formatMarginLevelIfAuth,
-  formatPlIfAuth,
-  formatUsdIfAuth,
-  maskAccountId,
-} from '@/lib/account-display'
+import { formatMarginLevelIfAuth, formatPlIfAuth } from '@/lib/account-display'
+import { useAuthStore } from '@/stores/auth-store'
+import { apiClient } from '@/lib/api-client'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 export type MobileBankTab =
-  | 'home'
-  | 'markets'
   | 'trade'
+  | 'positions'
+  | 'history'
+  | 'account'
   | 'wallet'
   | 'profile'
   | 'settings'
   | 'notifications'
   | 'documents'
   | 'chat'
+  | 'chart'
 
 interface AccountSummary {
   balance: number
@@ -76,236 +75,518 @@ interface MobileBankingExperienceProps {
   onClosePosition: (id: string) => void
 }
 
-export default function MobileBankingExperience(props: MobileBankingExperienceProps) {
-  const [tab, setTab] = useState<MobileBankTab>('home')
-  const { data: transactions = [] } = useTransactions()
-  const go = (next: MobileBankTab) => setTab(next)
-  const auth = props.isAuthenticated
-  const displayName = auth ? (props.userName ?? 'Client') : 'Guest'
-  const accountRef = maskAccountId(props.accountId)
-  const requireAuth = props.onLogin ?? (() => {})
+const SYMBOL_ICONS: Record<string, string> = {
+  EURUSD: '🇪🇺',
+  GBPUSD: '🇬🇧',
+  USDJPY: '🇯🇵',
+  AUDUSD: '🇦🇺',
+  EURNOK: '🇳🇴',
+  USDQAR: '🇶🇦',
+  USDMXN: '🇲🇽',
+  BTCUSD: '₿',
+  ETHUSD: 'Ξ',
+  SOLUSD: '◎',
+  XRPUSD: '✕',
+  XAUUSD: '🥇',
+  XAGUSD: '🥈',
+  UKOIL: '🛢',
+  USOIL: '🛢',
+  SPX500: '📈',
+  NAS100: '💻',
+  DJI30: '📊',
+  DAX40: '🇩🇪',
+  AAPL: '🍎',
+  MSFT: '🪟',
+  AMZN: '📦',
+  TSLA: '🚗',
+  NVDA: '🎮',
+  GOOGL: '🔍',
+  META: '📘',
+  NFLX: '🎬',
+  AMD: '💡',
+}
 
-  const movers = useMemo(() => {
-    return [...props.symbols]
-      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
-      .slice(0, 6)
-  }, [props.symbols])
+function moneyTone(value: number, auth: boolean) {
+  if (!auth) return 'text-[#9ca3af]'
+  if (value > 0) return 'text-[#22c55e]'
+  if (value < 0) return 'text-[#ef4444]'
+  return 'text-white'
+}
+
+function formatMoneyEn(value: number, auth: boolean) {
+  if (!auth) return '—'
+  const abs = Math.abs(value)
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(abs)
+  const sign = value < 0 ? '-' : ''
+  return `${sign}${formatted} USD`
+}
+
+export default function MobileBankingExperience(props: MobileBankingExperienceProps) {
+  const [tab, setTab] = useState<MobileBankTab>('trade')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [watchTab, setWatchTab] = useState<'favorites' | 'all'>('favorites')
+  const go = (next: MobileBankTab) => {
+    setTab(next)
+    setMenuOpen(false)
+  }
+  const auth = props.isAuthenticated
+  const requireAuth = props.onLogin ?? (() => {})
+  const { accessToken } = useAuthStore()
+  const queryClient = useQueryClient()
+
+  const { data: favorites = [] } = useQuery({
+    queryKey: ['favorites'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: string[] }>('/account/favorites', accessToken ?? undefined)
+      return res.data
+    },
+    enabled: !!accessToken,
+  })
+
+  const watchSymbols = useMemo(() => {
+    if (watchTab === 'favorites') {
+      const favs = props.symbols.filter((s) => favorites.includes(s.symbol))
+      // If no favorites yet, show a starter set so the screen isn't empty
+      return favs.length > 0
+        ? favs
+        : props.symbols.filter((s) =>
+            ['EURUSD', 'GBPUSD', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'USDJPY'].includes(s.symbol)
+          )
+    }
+    return props.symbols
+  }, [props.symbols, watchTab, favorites])
+
+  const toggleFavorite = async (symbol: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!accessToken) {
+      requireAuth()
+      return
+    }
+    const isFav = favorites.includes(symbol)
+    if (isFav) await apiClient.delete(`/account/favorites/${symbol}`, accessToken)
+    else await apiClient.post('/account/favorites', { symbol }, accessToken)
+    queryClient.invalidateQueries({ queryKey: ['favorites'] })
+  }
 
   return (
-    <div className="mobile-trading-app flex h-[100dvh] flex-col bg-[#070b1a] text-white">
-      <header className="shrink-0 border-b border-[#1e293b] bg-[#0a0e27]/95 px-4 pb-3 pt-[max(0.65rem,env(safe-area-inset-top))] backdrop-blur-md">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#6366f1] to-[#3b82f6] text-xs font-black">
-                TM
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">
-                  {auth ? 'Live trading account' : 'Market access only'}
-                </p>
-                <h1 className="text-sm font-semibold text-white">{displayName}</h1>
-                {auth && accountRef && (
-                  <p className="font-mono text-[10px] text-[#64748b]">Acct #{accountRef}</p>
-                )}
-              </div>
-            </div>
-            <Link href="/landing" className="mt-1 inline-block text-[10px] text-[#6366f1]">
-              Barratt Cooke Limited
-            </Link>
-          </div>
+    <div className="mobile-trading-app flex h-[100dvh] flex-col bg-[#12151c] text-white">
+      {/* Top bar — logo · Deposit · menu */}
+      <header className="shrink-0 px-3 pt-[max(0.55rem,env(safe-area-inset-top))]">
+        <div className="flex items-center justify-between gap-2 pb-2">
+          <Link href="/landing" className="flex h-9 w-9 items-center justify-center">
+            <span className="text-2xl font-black italic tracking-tighter text-[#7c8cff]">M</span>
+          </Link>
           <div className="flex items-center gap-2">
-            {!auth && (
-              <button
-                type="button"
-                onClick={requireAuth}
-                className="rounded-lg bg-[#6366f1] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white"
-              >
-                Sign in
-              </button>
-            )}
-            <LiveBadge live={props.dataSource === 'live'} label={props.dataSource === 'live' ? 'Live' : props.dataSource === 'unavailable' ? 'Down' : 'Delayed'} />
             <button
               type="button"
-              onClick={() => go('notifications')}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#111538] ring-1 ring-[#1e293b]"
-              aria-label="Notifications"
+              onClick={() => (auth ? go('wallet') : requireAuth())}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#1f9d57] px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_0_12px_rgba(31,157,87,0.35)]"
             >
-              <Bell className="h-4 w-4 text-[#94a3b8]" />
+              <ArrowRight className="h-3.5 w-3.5" />
+              Deposit
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              className="flex h-9 w-9 items-center justify-center text-white"
+              aria-label="Menu"
+            >
+              <Menu className="h-6 w-6" />
             </button>
           </div>
         </div>
 
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <MetricChip label="Balance" value={formatUsdIfAuth(props.account.balance, auth)} />
-          <MetricChip label="Credit" value={formatUsdIfAuth(props.account.credit, auth)} />
-          <MetricChip label="Equity" value={formatUsdIfAuth(props.account.equity, auth)} highlight />
-          <MetricChip label="Margin" value={formatUsdIfAuth(props.account.margin, auth)} />
-          <MetricChip label="Free margin" value={formatUsdIfAuth(props.account.freeMargin, auth)} />
-          <MetricChip
-            label="Margin level"
-            value={formatMarginLevelIfAuth(props.account.marginLevel, auth)}
+        {/* Account metrics 2×3 grid */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-1 pb-3">
+          <StatCell
+            label="Profit"
+            value={auth ? formatMoneyEn(props.account.profit, true) : '—'}
+            className={moneyTone(props.account.profit, auth)}
           />
-          <MetricChip
-            label="P/L"
-            value={formatPlIfAuth(props.account.profit, auth)}
-            tone={auth ? (props.account.profit >= 0 ? 'up' : 'down') : undefined}
+          <StatCell
+            label="Margin Level"
+            value={formatMarginLevelIfAuth(props.account.marginLevel, auth)}
+            className={
+              auth && props.account.marginLevel != null && props.account.marginLevel < 100
+                ? 'text-[#f472b6]'
+                : auth
+                  ? 'text-white'
+                  : 'text-[#9ca3af]'
+            }
+          />
+          <StatCell
+            label="Equity"
+            value={formatMoneyEn(props.account.equity, auth)}
+            className={moneyTone(props.account.equity, auth)}
+          />
+          <StatCell
+            label="Balance"
+            value={formatMoneyEn(props.account.balance, auth)}
+            className={moneyTone(props.account.balance, auth)}
+          />
+          <StatCell
+            label="Free Margin"
+            value={formatMoneyEn(props.account.freeMargin, auth)}
+            className={moneyTone(props.account.freeMargin, auth)}
+          />
+          <StatCell
+            label="Margin"
+            value={formatMoneyEn(props.account.margin, auth)}
+            className={auth ? 'text-[#22c55e]' : 'text-[#9ca3af]'}
           />
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4">
-        {tab === 'home' && (
-          <AccountHomeTab
-            account={props.account}
-            transactions={transactions}
-            positions={props.positions}
-            movers={movers}
-            symbolMeta={props.symbolMeta}
-            onNavigate={go}
-            onSelectSymbol={(s) => {
-              props.onSelectSymbol(s)
-              go('trade')
-            }}
-            isAuthenticated={props.isAuthenticated}
-            onLogin={props.onLogin}
-            onRegister={props.onRegister}
-          />
-        )}
-        {tab === 'markets' && (
-          <MobileTradingView
-            layout="account"
-            initialView="market"
-            isAuthenticated={auth}
-            onRequireAuth={requireAuth}
-            selectedSymbol={props.selectedSymbol}
-            symbols={props.symbols}
-            symbolMeta={props.symbolMeta}
-            dataSource={props.dataSource}
-            onSelectSymbol={props.onSelectSymbol}
-            lotSize={props.lotSize}
-            onLotSizeChange={props.onLotSizeChange}
-            onTrade={props.onTrade}
-            tradeLoading={props.tradeLoading}
-            positions={props.positions}
-            onClosePosition={props.onClosePosition}
-            showNav={false}
-          />
-        )}
+      {/* News / calendar ticker */}
+      <div className="mx-3 mb-2 flex items-center gap-2 overflow-hidden rounded-lg bg-[#1a1e27] px-2.5 py-2">
+        <span className="text-base leading-none">🇯🇵</span>
+        <span className="font-mono text-[11px] text-[#9ca3af]">23:50</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-[#e5e7eb]">Foreign Bond Investment</span>
+        <span className="shrink-0 text-[10px] text-[#6b7280]">Impact</span>
+        <span className="flex gap-0.5">
+          <span className="h-2 w-2 rounded-[2px] bg-[#22c55e]" />
+          <span className="h-2 w-2 rounded-[2px] bg-[#3f4654]" />
+          <span className="h-2 w-2 rounded-[2px] bg-[#3f4654]" />
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#6b7280]" />
+      </div>
+
+      {/* Main sheet */}
+      <main className="relative min-h-0 flex-1 overflow-hidden rounded-t-2xl bg-[#161a22] shadow-[0_-4px_24px_rgba(0,0,0,0.35)]">
+        <div className="flex justify-center pt-2 pb-1">
+          <div className="h-1 w-10 rounded-full bg-[#3f4654]" />
+        </div>
+
         {tab === 'trade' && (
-          <MobileTradingView
-            layout="account"
-            initialView="chart"
-            isAuthenticated={auth}
-            onRequireAuth={requireAuth}
-            selectedSymbol={props.selectedSymbol}
-            symbols={props.symbols}
-            symbolMeta={props.symbolMeta}
-            dataSource={props.dataSource}
-            onSelectSymbol={props.onSelectSymbol}
-            lotSize={props.lotSize}
-            onLotSizeChange={props.onLotSizeChange}
-            onTrade={props.onTrade}
-            tradeLoading={props.tradeLoading}
-            positions={props.positions}
-            onClosePosition={props.onClosePosition}
-            showNav={false}
-          />
-        )}
-        {tab === 'wallet' &&
-          (auth ? (
-            <div className="mobile-trading-subpage -mx-1 overflow-hidden rounded-2xl border border-[#1e293b] bg-[#0a0e27]">
-              <WalletPage appearance="terminal" />
+          <div className="flex h-[calc(100%-0.75rem)] flex-col">
+            <div className="flex items-center border-b border-[#2a2e38]">
+              <button
+                type="button"
+                onClick={() => setWatchTab('favorites')}
+                className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[13px] font-medium ${
+                  watchTab === 'favorites'
+                    ? 'text-white border-b-2 border-[#22d3ee]'
+                    : 'text-[#6b7280]'
+                }`}
+              >
+                <Star className={`h-3.5 w-3.5 ${watchTab === 'favorites' ? 'fill-[#38bdf8] text-[#38bdf8]' : ''}`} />
+                Favorites
+              </button>
+              <button
+                type="button"
+                onClick={() => setWatchTab('all')}
+                className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[13px] font-medium ${
+                  watchTab === 'all' ? 'text-white border-b-2 border-[#22d3ee]' : 'text-[#6b7280]'
+                }`}
+              >
+                <Search className="h-3.5 w-3.5" />
+                All Symbols
+              </button>
             </div>
-          ) : (
-            <GuestFundsPanel onLogin={requireAuth} onRegister={props.onRegister ?? requireAuth} />
-          ))}
-        {tab === 'profile' && (
-          <ProfileTradingMenu
-            onNavigate={go}
-            onLogout={props.onLogout}
-            isAuthenticated={props.isAuthenticated}
-            onLogin={props.onLogin}
+
+            <div className="grid grid-cols-[1.2fr_1fr_0.9fr] px-3 py-2 text-[11px] text-[#6b7280]">
+              <span>Symbol</span>
+              <span className="text-center">Price</span>
+              <span className="text-right">Change</span>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-24">
+              {watchSymbols.map((s) => {
+                const up = Number(s.changePercent) >= 0
+                const price = Number(s.bid || s.price || 0)
+                const spreadPts = Math.round(Math.abs(Number(s.ask) - Number(s.bid)) * (price > 50 ? 10 : 100000))
+                const low = price * 0.9985
+                const high = price * 1.0015
+                const closed = s.marketStatus && s.marketStatus !== 'open'
+                return (
+                  <button
+                    key={s.symbol}
+                    type="button"
+                    onClick={() => {
+                      props.onSelectSymbol(s)
+                      go('chart')
+                    }}
+                    className="grid w-full grid-cols-[1.2fr_1fr_0.9fr] items-center border-b border-[#1f2430] px-3 py-3 text-left active:bg-[#1a1e27]"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1f2430] text-sm">
+                        {SYMBOL_ICONS[s.symbol] || props.symbolMeta[s.symbol]?.icon || s.symbol.slice(0, 2)}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <p className="truncate text-[14px] font-semibold text-white">{s.symbol}</p>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => toggleFavorite(s.symbol, e)}
+                            className="text-[#4b5563]"
+                          >
+                            <Star
+                              className={`h-3 w-3 ${
+                                favorites.includes(s.symbol) ? 'fill-amber-400 text-amber-400' : ''
+                              }`}
+                            />
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#6b7280]">Spread: {Math.max(1, spreadPts)}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-center">
+                      {closed ? (
+                        <p className="font-mono text-[11px] text-[#f59e0b]">Closed</p>
+                      ) : null}
+                      <p
+                        className={`font-mono text-[15px] font-semibold ${
+                          up ? 'text-[#22c55e]' : 'text-[#ef4444]'
+                        }`}
+                      >
+                        {formatPrice(price)}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-[#6b7280]">
+                        <span className="text-[#22c55e]">L</span>{' '}
+                        <span className="font-mono text-[#9ca3af]">{formatPrice(low)}</span>
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p
+                        className={`inline-flex items-center gap-0.5 font-mono text-[13px] font-semibold ${
+                          up ? 'text-[#22c55e]' : 'text-[#ef4444]'
+                        }`}
+                      >
+                        <span className="text-[9px]">{up ? '▲' : '▼'}</span>
+                        {up ? '' : '-'}
+                        {Math.abs(Number(s.changePercent || 0)).toFixed(2)}%
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-[#6b7280]">
+                        <span className="text-[#ef4444]">H</span>{' '}
+                        <span className="font-mono text-[#9ca3af]">{formatPrice(high)}</span>
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {tab === 'positions' && (
+          <PositionsSheet
+            auth={auth}
+            positions={props.positions}
+            onClose={props.onClosePosition}
+            onLogin={requireAuth}
+            onTrade={() => go('chart')}
           />
         )}
+
+        {tab === 'history' && (
+          <HistorySheet auth={auth} onLogin={requireAuth} onWallet={() => go('wallet')} />
+        )}
+
+        {tab === 'account' && (
+          <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
+            <ProfileTradingMenu
+              onNavigate={go}
+              onLogout={props.onLogout}
+              isAuthenticated={auth}
+              onLogin={props.onLogin}
+            />
+          </div>
+        )}
+
+        {tab === 'chart' && (
+          <div className="h-[calc(100%-0.5rem)] overflow-hidden pb-16">
+            <MobileTradingView
+              layout="account"
+              initialView="chart"
+              isAuthenticated={auth}
+              onRequireAuth={requireAuth}
+              selectedSymbol={props.selectedSymbol}
+              symbols={props.symbols}
+              symbolMeta={props.symbolMeta}
+              dataSource={props.dataSource}
+              onSelectSymbol={props.onSelectSymbol}
+              lotSize={props.lotSize}
+              onLotSizeChange={props.onLotSizeChange}
+              onTrade={props.onTrade}
+              tradeLoading={props.tradeLoading}
+              positions={props.positions}
+              onClosePosition={props.onClosePosition}
+              showNav={false}
+            />
+          </div>
+        )}
+
+        {tab === 'wallet' && (
+          <div className="h-full overflow-y-auto px-2 pb-24 pt-2">
+            {auth ? (
+              <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#12151c]">
+                <WalletPage appearance="terminal" />
+              </div>
+            ) : (
+              <GuestGate onLogin={requireAuth} onRegister={props.onRegister ?? requireAuth} />
+            )}
+          </div>
+        )}
+
         {tab === 'settings' && (
-          <TradingSubpage title="Settings">
+          <SubpageShell title="Settings">
             <SettingsPage />
-          </TradingSubpage>
+          </SubpageShell>
         )}
         {tab === 'notifications' && (
-          <TradingSubpage title="Notifications">
+          <SubpageShell title="Notifications">
             <NotificationsPage />
-          </TradingSubpage>
+          </SubpageShell>
         )}
         {tab === 'documents' && (
-          <TradingSubpage title="Documents">
+          <SubpageShell title="Documents">
             <DocumentsPage />
-          </TradingSubpage>
+          </SubpageShell>
         )}
         {tab === 'chat' && (
-          <TradingSubpage title="Support">
+          <SubpageShell title="Support">
             <ChatPage />
-          </TradingSubpage>
+          </SubpageShell>
+        )}
+        {tab === 'profile' && (
+          <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
+            <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#12151c]">
+              <ProfilePage appearance="terminal" compact />
+            </div>
+          </div>
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1e293b] bg-[#0a0e27]/95 px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-lg items-end justify-between">
-          <TabButton active={tab === 'home'} label="Account" icon={Briefcase} onClick={() => go('home')} />
-          <TabButton active={tab === 'markets'} label="Markets" icon={TrendingUp} onClick={() => go('markets')} />
-          <TabButton active={tab === 'trade'} label="Trade" icon={LineChart} onClick={() => go('trade')} />
-          <TabButton active={tab === 'wallet'} label="Funds" icon={WalletIcon} onClick={() => go('wallet')} />
-          <TabButton active={tab === 'profile'} label="Profile" icon={User} onClick={() => go('profile')} />
+      {/* Bottom nav — Trade · Positions · History · Account */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#2a2e38] bg-[#12151c]/95 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-md">
+        <div className="mx-auto flex max-w-lg items-stretch justify-around px-2">
+          <NavItem
+            active={tab === 'trade' || tab === 'chart'}
+            label="Trade"
+            icon={BarChart3}
+            onClick={() => go('trade')}
+          />
+          <NavItem
+            active={tab === 'positions'}
+            label="Positions"
+            icon={Briefcase}
+            onClick={() => go('positions')}
+          />
+          <NavItem
+            active={tab === 'history'}
+            label="History"
+            icon={CalendarDays}
+            onClick={() => go('history')}
+          />
+          <NavItem
+            active={tab === 'account' || tab === 'profile' || tab === 'wallet'}
+            label="Account"
+            icon={User}
+            onClick={() => go('account')}
+          />
         </div>
       </nav>
+
+      {/* Side menu */}
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/60" onClick={() => setMenuOpen(false)} />
+          <aside className="fixed right-0 top-0 z-[70] flex h-full w-[78%] max-w-xs flex-col bg-[#161a22] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2a2e38] px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
+              <span className="text-sm font-semibold">Menu</span>
+              <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close">
+                <X className="h-5 w-5 text-[#9ca3af]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto py-2">
+              {[
+                { id: 'trade' as const, label: 'Trade' },
+                { id: 'positions' as const, label: 'Positions' },
+                { id: 'history' as const, label: 'History' },
+                { id: 'wallet' as const, label: 'Deposit / Wallet' },
+                { id: 'chat' as const, label: 'Support chat' },
+                { id: 'settings' as const, label: 'Settings' },
+                { id: 'notifications' as const, label: 'Notifications' },
+                { id: 'documents' as const, label: 'Documents' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => go(item.id)}
+                  className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm text-white active:bg-[#1f2430]"
+                >
+                  {item.label}
+                  <ChevronRight className="h-4 w-4 text-[#6b7280]" />
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-[#2a2e38] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {auth ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    props.onLogout?.()
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 py-3 text-sm font-semibold text-red-400"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log out
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    requireAuth()
+                  }}
+                  className="w-full rounded-lg bg-[#1f9d57] py-3 text-sm font-semibold text-white"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   )
 }
 
-function LiveBadge({ live, label }: { live: boolean; label?: string }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
-        live ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' : 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/25'
-      }`}
-    >
-      <Radio className={`h-3 w-3 ${live ? 'animate-pulse' : ''}`} />
-      {label || (live ? 'Live' : 'Delayed')}
-    </span>
-  )
+function formatPrice(price: number) {
+  if (!Number.isFinite(price) || price <= 0) return '—'
+  if (price > 1000) return price.toFixed(2)
+  if (price > 100) return price.toFixed(2)
+  if (price > 10) return price.toFixed(3)
+  return price.toFixed(5)
 }
 
-function MetricChip({
+function StatCell({
   label,
   value,
-  highlight,
-  tone,
+  className,
 }: {
   label: string
   value: string
-  highlight?: boolean
-  tone?: 'up' | 'down'
+  className?: string
 }) {
   return (
-    <div
-      className={`shrink-0 rounded-xl px-3 py-2 ring-1 ${
-        highlight ? 'bg-[#6366f1]/15 ring-[#6366f1]/40' : 'bg-[#111538] ring-[#1e293b]'
-      }`}
-    >
-      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#64748b]">{label}</p>
-      <p
-        className={`font-mono text-xs font-bold ${
-          tone === 'up' ? 'text-emerald-400' : tone === 'down' ? 'text-red-400' : 'text-white'
-        }`}
-      >
+    <div>
+      <p className="text-[11px] text-[#6b7280]">{label}</p>
+      <p className={`mt-0.5 font-mono text-[17px] font-semibold leading-tight ${className || 'text-white'}`}>
         {value}
       </p>
     </div>
   )
 }
 
-function TabButton({
+function NavItem({
   active,
   label,
   icon: Icon,
@@ -320,283 +601,123 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-w-[3.5rem] flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 transition ${
-        active ? 'text-[#22d3ee]' : 'text-[#64748b]'
+      className={`flex min-w-[4.25rem] flex-col items-center gap-0.5 px-2 py-1.5 ${
+        active ? 'text-[#38bdf8]' : 'text-[#6b7280]'
       }`}
     >
-      <Icon className={`h-5 w-5 ${active ? 'stroke-[2.5]' : 'stroke-2'}`} />
-      <span className="text-[9px] font-bold uppercase tracking-wide">{label}</span>
-      {active && <span className="h-0.5 w-5 rounded-full bg-[#22d3ee]" />}
+      <Icon className={`h-5 w-5 ${active ? 'stroke-[2.4]' : ''}`} />
+      <span className="text-[10px] font-medium">{label}</span>
     </button>
   )
 }
 
-function AccountHomeTab({
-  account,
-  transactions,
+function PositionsSheet({
+  auth,
   positions,
-  movers,
-  symbolMeta,
-  onNavigate,
-  onSelectSymbol,
-  isAuthenticated,
+  onClose,
   onLogin,
-  onRegister,
+  onTrade,
 }: {
-  account: AccountSummary
-  transactions: { id: string; type: string; amount: number; createdAt: string }[]
+  auth: boolean
   positions: any[]
-  movers: any[]
-  symbolMeta: Record<string, { icon: string }>
-  onNavigate: (tab: MobileBankTab) => void
-  onSelectSymbol: (symbol: any) => void
-  isAuthenticated: boolean
-  onLogin?: () => void
-  onRegister?: () => void
+  onClose: (id: string) => void
+  onLogin: () => void
+  onTrade: () => void
 }) {
-  const auth = isAuthenticated
-
+  if (!auth) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <p className="text-sm text-[#9ca3af]">Sign in to view open positions.</p>
+        <button type="button" onClick={onLogin} className="mt-4 rounded-lg bg-[#1f9d57] px-4 py-2 text-sm font-semibold">
+          Sign in
+        </button>
+      </div>
+    )
+  }
+  if (positions.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <p className="text-sm text-[#9ca3af]">No open positions</p>
+        <button type="button" onClick={onTrade} className="mt-4 text-sm font-semibold text-[#38bdf8]">
+          Open a trade
+        </button>
+      </div>
+    )
+  }
   return (
-    <div className="space-y-4 pb-4">
-      {!auth ? (
-        <section className="relative overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538] p-5">
-          <p className="text-xs font-semibold uppercase tracking-widest text-[#64748b]">Client portal</p>
-          <h2 className="mt-2 text-xl font-bold text-white">Sign in to your trading account</h2>
-          <p className="mt-2 text-sm leading-relaxed text-[#94a3b8]">
-            Balances, margin, and positions are shown only after login. You can still browse live markets and charts.
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onLogin}
-              className="rounded-xl bg-[#6366f1] py-3 text-sm font-bold text-white"
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={onRegister}
-              className="rounded-xl border border-[#6366f1]/50 bg-[#0d1230] py-3 text-sm font-bold text-[#a5b4fc]"
-            >
-              Open account
-            </button>
-          </div>
-        </section>
-      ) : (
-        <section className="relative overflow-hidden rounded-2xl border border-[#6366f1]/30 bg-gradient-to-br from-[#111538] via-[#0d1230] to-[#070b1a] p-5 shadow-[0_0_40px_rgba(99,102,241,0.12)]">
-          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[#6366f1]/20 blur-2xl" />
-          <p className="text-xs font-medium uppercase tracking-widest text-[#94a3b8]">Account equity</p>
-          <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-white">
-            {formatUsdIfAuth(account.equity, true)}
-          </p>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
-              <p className="text-[9px] uppercase text-[#64748b]">Margin lvl</p>
-              <p className="font-mono text-sm font-semibold text-[#22d3ee]">
-                {formatMarginLevelIfAuth(account.marginLevel, true)}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
-              <p className="text-[9px] uppercase text-[#64748b]">Open P/L</p>
-              <p
-                className={`font-mono text-sm font-semibold ${account.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
-              >
-                {formatPlIfAuth(account.profit, true)}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[#0a0e27]/80 py-2 ring-1 ring-[#1e293b]">
-              <p className="text-[9px] uppercase text-[#64748b]">Positions</p>
-              <p className="font-mono text-sm font-semibold text-white">{positions.length}</p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <section className="grid grid-cols-4 gap-2">
-        <QuickAction
-          icon={LineChart}
-          label="Trade"
-          onClick={() => (auth ? onNavigate('trade') : onLogin?.())}
-          accent="purple"
-        />
-        <QuickAction icon={TrendingUp} label="Markets" onClick={() => onNavigate('markets')} accent="cyan" />
-        <QuickAction
-          icon={ArrowDownLeft}
-          label="Deposit"
-          onClick={() => (auth ? onNavigate('wallet') : onLogin?.())}
-          accent="green"
-        />
-        <QuickAction
-          icon={ArrowUpRight}
-          label="Withdraw"
-          onClick={() => (auth ? onNavigate('wallet') : onLogin?.())}
-          accent="amber"
-        />
-      </section>
-
-      <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Activity className="h-4 w-4 text-[#22d3ee]" />
-            Market movers
-          </h2>
-          <button type="button" onClick={() => onNavigate('markets')} className="text-xs font-semibold text-[#6366f1]">
-            Watchlist
-          </button>
-        </div>
-        <ul className="space-y-2">
-          {movers.map((s) => {
-            const up = s.changePercent >= 0
-            return (
-              <li key={s.symbol}>
+    <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
+      <ul className="space-y-2">
+        {positions.map((p) => (
+          <li key={p.id} className="rounded-xl border border-[#2a2e38] bg-[#1a1e27] p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  {p.symbol}{' '}
+                  <span className={p.side === 'BUY' ? 'text-[#22c55e]' : 'text-[#ef4444]'}>{p.side}</span>
+                </p>
+                <p className="mt-1 font-mono text-[11px] text-[#6b7280]">
+                  {Number(p.volume).toFixed(2)} lot · {p.openPrice} → {Number(p.currentPrice).toFixed?.(5) ?? p.currentPrice}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className={`font-mono text-sm font-semibold ${p.profit >= 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
+                  {formatPlIfAuth(p.profit, true)}
+                </p>
                 <button
                   type="button"
-                  onClick={() => onSelectSymbol(s)}
-                  className="flex w-full items-center justify-between rounded-xl bg-[#0d1230] px-3 py-2.5 ring-1 ring-[#1e293b] active:bg-[#161b3d]"
+                  onClick={() => onClose(p.id)}
+                  className="mt-1 text-[11px] font-semibold text-[#ef4444]"
                 >
-                  <div className="flex items-center gap-2 text-left">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#161b3d] text-xs font-bold">
-                      {symbolMeta[s.symbol]?.icon ?? s.symbol.slice(0, 2)}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{s.symbol}</p>
-                      <p className="font-mono text-[11px] text-[#94a3b8]">{s.bid?.toFixed(5)}</p>
-                    </div>
-                  </div>
-                  <span
-                    className={`inline-flex items-center gap-0.5 rounded-lg px-2 py-1 font-mono text-xs font-bold ${
-                      up ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                    }`}
-                  >
-                    {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {up ? '+' : ''}
-                    {s.changePercent?.toFixed(2)}%
-                  </span>
+                  Close
                 </button>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
-
-      <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Open positions</h2>
-          <button type="button" onClick={() => onNavigate('trade')} className="text-xs font-semibold text-[#6366f1]">
-            Terminal
-          </button>
-        </div>
-        {!auth ? (
-          <p className="text-sm text-[#64748b]">Sign in to view open positions and margin usage.</p>
-        ) : positions.length === 0 ? (
-          <p className="text-sm text-[#64748b]">No open trades — tap Trade to open a position.</p>
-        ) : (
-          <ul className="space-y-2">
-            {positions.map((p) => (
-              <li
-                key={p.id}
-                className="rounded-xl bg-[#0d1230] px-3 py-3 ring-1 ring-[#1e293b]"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-white">
-                      {p.symbol}{' '}
-                      <span className={`text-xs ${p.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>{p.side}</span>
-                    </p>
-                    <p className="mt-0.5 font-mono text-[10px] text-[#64748b]">
-                      {p.volume} lot · open {p.openPrice} → {p.currentPrice?.toFixed?.(5) ?? p.currentPrice}
-                    </p>
-                  </div>
-                  <p className={`font-mono text-sm font-bold ${p.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatPlIfAuth(p.profit, true)}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Account ledger</h2>
-          <button type="button" onClick={() => onNavigate('wallet')} className="text-xs font-semibold text-[#6366f1]">
-            Funds
-          </button>
-        </div>
-        {!auth ? (
-          <p className="text-sm text-[#64748b]">Account ledger available after sign in.</p>
-        ) : transactions.length === 0 ? (
-          <p className="text-sm text-[#64748b]">No ledger entries yet</p>
-        ) : (
-          <ul className="divide-y divide-[#1e293b]">
-            {transactions.slice(0, 6).map((tx) => (
-              <li key={tx.id} className="flex items-center justify-between py-2.5 first:pt-0">
-                <div>
-                  <p className="text-sm font-medium text-white">{tx.type.replace(/_/g, ' ')}</p>
-                  <p className="text-[10px] text-[#64748b]">{new Date(tx.createdAt).toLocaleString()}</p>
-                </div>
-                <span className={`font-mono text-sm font-semibold ${tx.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {formatPlIfAuth(tx.amount, true)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
 
-function QuickAction({
-  icon: Icon,
-  label,
-  onClick,
-  accent,
+function HistorySheet({
+  auth,
+  onLogin,
+  onWallet,
 }: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  onClick: () => void
-  accent: 'purple' | 'cyan' | 'green' | 'amber'
+  auth: boolean
+  onLogin: () => void
+  onWallet: () => void
 }) {
-  const ring =
-    accent === 'purple'
-      ? 'ring-[#6366f1]/40 text-[#a5b4fc]'
-      : accent === 'cyan'
-        ? 'ring-[#22d3ee]/40 text-[#22d3ee]'
-        : accent === 'green'
-          ? 'ring-emerald-500/40 text-emerald-400'
-          : 'ring-amber-500/40 text-amber-400'
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex flex-col items-center gap-1.5 rounded-xl border border-[#1e293b] bg-[#111538] py-3 active:scale-[0.98]"
-    >
-      <span className={`flex h-10 w-10 items-center justify-center rounded-full bg-[#0d1230] ring-1 ${ring}`}>
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</span>
-    </button>
+    <div className="px-4 py-10 text-center">
+      <History className="mx-auto h-8 w-8 text-[#6b7280]" />
+      <p className="mt-3 text-sm text-[#9ca3af]">
+        {auth ? 'Closed trades and ledger entries appear in Funds.' : 'Sign in to view trading history.'}
+      </p>
+      <button
+        type="button"
+        onClick={auth ? onWallet : onLogin}
+        className="mt-4 rounded-lg bg-[#1f9d57] px-4 py-2 text-sm font-semibold text-white"
+      >
+        {auth ? 'Open Funds' : 'Sign in'}
+      </button>
+    </div>
   )
 }
 
-function GuestFundsPanel({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
+function GuestGate({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
   return (
-    <section className="rounded-2xl border border-[#1e293b] bg-[#111538] p-6 text-center">
-      <WalletIcon className="mx-auto h-10 w-10 text-[#6366f1]" />
-      <h2 className="mt-3 text-lg font-bold text-white">Funds & wallet</h2>
-      <p className="mt-2 text-sm text-[#94a3b8]">
-        Deposits, withdrawals, and balances are linked to your trading account. Sign in to continue.
-      </p>
+    <section className="rounded-xl border border-[#2a2e38] bg-[#1a1e27] p-6 text-center">
+      <h2 className="text-lg font-bold text-white">Funds & wallet</h2>
+      <p className="mt-2 text-sm text-[#9ca3af]">Sign in to deposit, withdraw, and view balances.</p>
       <div className="mt-5 grid grid-cols-2 gap-2">
-        <button type="button" onClick={onLogin} className="rounded-xl bg-[#6366f1] py-3 text-sm font-bold text-white">
+        <button type="button" onClick={onLogin} className="rounded-lg bg-[#1f9d57] py-3 text-sm font-bold text-white">
           Sign in
         </button>
         <button
           type="button"
           onClick={onRegister}
-          className="rounded-xl border border-[#1e293b] bg-[#0d1230] py-3 text-sm font-bold text-white"
+          className="rounded-lg border border-[#2a2e38] bg-[#12151c] py-3 text-sm font-bold text-white"
         >
           Register
         </button>
@@ -617,11 +738,12 @@ function ProfileTradingMenu({
   onLogin?: () => void
 }) {
   return (
-    <div className="space-y-4 pb-4">
-      <div className="overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538]">
+    <div className="space-y-3 pb-4">
+      <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#1a1e27]">
         <ProfilePage appearance="terminal" compact />
       </div>
-      <div className="overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538]">
+      <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#1a1e27]">
+        <MenuRow label="Deposit / Wallet" onClick={() => onNavigate('wallet')} />
         <MenuRow label="Settings" onClick={() => onNavigate('settings')} />
         <MenuRow label="Notifications" onClick={() => onNavigate('notifications')} />
         <MenuRow label="Documents & reports" onClick={() => onNavigate('documents')} />
@@ -638,11 +760,7 @@ function ProfileTradingMenu({
         </button>
       ) : (
         onLogin && (
-          <button
-            type="button"
-            onClick={onLogin}
-            className="w-full rounded-xl bg-[#6366f1] py-3 text-sm font-bold text-white"
-          >
+          <button type="button" onClick={onLogin} className="w-full rounded-xl bg-[#1f9d57] py-3 text-sm font-bold text-white">
             Sign in
           </button>
         )
@@ -651,13 +769,11 @@ function ProfileTradingMenu({
   )
 }
 
-function TradingSubpage({ title, children }: { title: string; children: React.ReactNode }) {
+function SubpageShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="pb-4">
-      <h2 className="mb-3 px-1 text-sm font-semibold uppercase tracking-wide text-[#94a3b8]">{title}</h2>
-      <div className="mobile-trading-subpage overflow-hidden rounded-2xl border border-[#1e293b] bg-[#111538]">
-        {children}
-      </div>
+    <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#9ca3af]">{title}</h2>
+      <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#1a1e27]">{children}</div>
     </div>
   )
 }
@@ -667,10 +783,10 @@ function MenuRow({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between border-b border-[#1e293b] px-4 py-3.5 text-left text-sm font-medium text-white last:border-0 active:bg-[#0d1230]"
+      className="flex w-full items-center justify-between border-b border-[#2a2e38] px-4 py-3.5 text-left text-sm font-medium text-white last:border-0 active:bg-[#12151c]"
     >
       {label}
-      <ChevronRight className="h-4 w-4 text-[#64748b]" />
+      <ChevronRight className="h-4 w-4 text-[#6b7280]" />
     </button>
   )
 }
