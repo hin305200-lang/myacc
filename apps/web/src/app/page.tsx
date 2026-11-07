@@ -24,6 +24,8 @@ import {
   useOpenPositions,
   useSymbolsWithSocket,
   useMarketCatalog,
+  clearCachedAccountSummary,
+  writeCachedAccountSummary,
   type MarketSymbol,
 } from '@/hooks/useMarketData'
 import { useLiveMarketTicks } from '@/hooks/useLiveMarketTicks'
@@ -69,7 +71,9 @@ export default function TradingPlatform() {
   const queryClient = useQueryClient()
   const logout = () => {
     storeLogout()
+    clearCachedAccountSummary()
     queryClient.removeQueries({ queryKey: ['account-summary'] })
+    queryClient.removeQueries({ queryKey: ['account-summary-mark'] })
     queryClient.removeQueries({ queryKey: ['account-dashboard'] })
     queryClient.removeQueries({ queryKey: ['account-transactions'] })
     queryClient.removeQueries({ queryKey: ['positions-open'] })
@@ -175,7 +179,16 @@ export default function TradingPlatform() {
       if (savedAccess || savedRefresh) {
         if (savedAccess) {
           try {
-            await apiClient.get<{ user: UserPayload }>('/auth/me', savedAccess)
+            // Validate session and warm account numbers in parallel for instant header metrics
+            const mePromise = apiClient.get<{ user: UserPayload }>('/auth/me', savedAccess)
+            void queryClient.prefetchQuery({
+              queryKey: ['account-summary'],
+              queryFn: async () => {
+                const res = await apiClient.get<{ data: unknown }>('/account/summary', savedAccess)
+                return res.data
+              },
+            })
+            await mePromise
             setShowAuth(false)
             return
           } catch {
@@ -359,7 +372,7 @@ export default function TradingPlatform() {
 
   const applyAccountFromResponse = (account: any) => {
     if (!account || typeof account !== 'object') return
-    queryClient.setQueryData(['account-summary'], {
+    const next = {
       balance: Number(account.balance ?? 0),
       credit: Number(account.credit ?? 0),
       equity: Number(account.equity ?? 0),
@@ -374,7 +387,10 @@ export default function TradingPlatform() {
       marginCallLevel: account.marginCallLevel,
       stopOutLevel: account.stopOutLevel,
       marginAlert: account.marginAlert ?? { level: 'ok' },
-    })
+    }
+    queryClient.setQueryData(['account-summary'], next)
+    const uid = useAuthStore.getState().user?.userId
+    if (uid) writeCachedAccountSummary(uid, next)
   }
 
   const handleTrade = async (side: 'BUY' | 'SELL', stopLoss?: number, takeProfit?: number) => {

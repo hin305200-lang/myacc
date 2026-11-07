@@ -10,7 +10,7 @@ import {
   type AuthPayload,
 } from './auth-tokens'
 import { getCandles, getMarketCatalog, getMarketSnapshot } from './market-prices'
-import { closePosition, placeMarketOrder, recalculateAccount } from './trading'
+import { applyAccountTotals, closePosition, placeMarketOrder, recalculateAccount } from './trading'
 
 type HandlerResult = NextResponse | null
 
@@ -230,8 +230,11 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
   const detail = parts[2]
 
   if (req.method === 'GET' && section === 'summary') {
-    // Full mark-to-market (batched quotes) — kept fast for live equity/P/L
-    const metrics = await recalculateAccount(userId)
+    // Default: instant DB snapshot (no market HTTP). ?mark=1 = full live BID/ASK recalc.
+    const markToMarket = req.nextUrl.searchParams.get('mark') === '1'
+    const metrics = markToMarket
+      ? await recalculateAccount(userId)
+      : await applyAccountTotals(userId)
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -252,9 +255,9 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
         ...user,
         balance: Number(user.balance),
         credit: Number(user.credit),
-        equity: Number(user.equity),
-        freeMargin: Number(user.freeMargin),
-        margin: Number(user.margin),
+        equity: Number(metrics?.equity ?? user.equity),
+        freeMargin: Number(metrics?.freeMargin ?? user.freeMargin),
+        margin: Number(metrics?.margin ?? user.margin),
         marginLevel: metrics?.marginLevel ?? null,
         leverage: user.leverage || 10,
         profit: metrics?.netFloatingPl ?? 0,

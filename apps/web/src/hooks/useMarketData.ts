@@ -199,6 +199,42 @@ function normalizeAccountSummary(raw: unknown): AccountSummary | undefined {
   }
 }
 
+const ACCOUNT_SUMMARY_CACHE = 'nexus-account-summary-v1'
+
+export function readCachedAccountSummary(userId?: string | null): AccountSummary | undefined {
+  if (typeof window === 'undefined' || !userId) return undefined
+  try {
+    const raw = localStorage.getItem(ACCOUNT_SUMMARY_CACHE)
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw) as { userId?: string; data?: unknown }
+    if (parsed.userId && parsed.userId !== userId) return undefined
+    return normalizeAccountSummary(parsed.data)
+  } catch {
+    return undefined
+  }
+}
+
+export function writeCachedAccountSummary(userId: string, data: AccountSummary) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(
+      ACCOUNT_SUMMARY_CACHE,
+      JSON.stringify({ userId, data, at: Date.now() })
+    )
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function clearCachedAccountSummary() {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(ACCOUNT_SUMMARY_CACHE)
+  } catch {
+    /* ignore */
+  }
+}
+
 export type Candle = {
   time: number
   open: number
@@ -381,8 +417,10 @@ export const useSymbolsWithSocket = () => {
 
 export const useAccountSummary = () => {
   const token = useAuthStore((state) => state.accessToken)
+  const userId = useAuthStore((state) => state.user?.userId)
   const socket = useSharedSocket()
   const queryClient = useQueryClient()
+  const cached = useMemo(() => readCachedAccountSummary(userId), [userId])
 
   useEffect(() => {
     if (!socket) return
@@ -390,25 +428,52 @@ export const useAccountSummary = () => {
       const normalized = normalizeAccountSummary(account)
       if (normalized) {
         queryClient.setQueryData(['account-summary'], normalized)
+        if (userId) writeCachedAccountSummary(userId, normalized)
       }
     }
     socket.on('account:update', handler)
     return () => {
       socket.off('account:update', handler)
     }
-  }, [socket, queryClient])
+  }, [socket, queryClient, userId])
 
+  // Instant DB snapshot — shows balance/equity immediately (no market HTTP)
   const { data } = useQuery({
     queryKey: ['account-summary'],
     queryFn: async () => {
       const response = await apiClient.get<{ data: unknown }>('/account/summary', token ?? undefined)
-      return normalizeAccountSummary(response.data)
+      const normalized = normalizeAccountSummary(response.data)
+      if (normalized && userId) writeCachedAccountSummary(userId, normalized)
+      return normalized
     },
     enabled: !!token,
-    // Backend recalculates floating P/L from live BID/ASK on every poll
+    placeholderData: cached,
+    staleTime: 1_000,
     refetchInterval: 2_000,
+    refetchOnMount: 'always',
   })
-  return data
+
+  // Slower live mark-to-market for floating P/L / stop-out (does not block first paint)
+  useQuery({
+    queryKey: ['account-summary-mark'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: unknown }>(
+        '/account/summary?mark=1',
+        token ?? undefined
+      )
+      const normalized = normalizeAccountSummary(response.data)
+      if (normalized) {
+        queryClient.setQueryData(['account-summary'], normalized)
+        if (userId) writeCachedAccountSummary(userId, normalized)
+      }
+      return normalized
+    },
+    enabled: !!token,
+    staleTime: 4_000,
+    refetchInterval: 5_000,
+  })
+
+  return data ?? cached
 }
 
 export type AccountDashboard = {

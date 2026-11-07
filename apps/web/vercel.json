@@ -6,6 +6,6 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "workspace-pages-advanced-20261108"
+    "REDEPLOY_STAMP": "instant-account-metrics-20261108"
   }
 }

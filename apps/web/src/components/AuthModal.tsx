@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore, type UserPayload } from '@/stores/auth-store'
+import { writeCachedAccountSummary } from '@/hooks/useMarketData'
 
 type Props = {
   open: boolean
@@ -13,6 +15,7 @@ type AuthMode = 'login' | 'register'
 
 export function AuthModal({ open, onClose }: Props) {
   const { setCredentials } = useAuthStore()
+  const queryClient = useQueryClient()
   const [mode, setMode] = useState<AuthMode>('login')
   const [fullName, setFullName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -74,6 +77,32 @@ export function AuthModal({ open, onClose }: Props) {
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
         })
+        // Prefetch balances immediately so header numbers appear without waiting
+        void queryClient
+          .fetchQuery({
+            queryKey: ['account-summary'],
+            queryFn: async () => {
+              const res = await apiClient.get<{ data: any }>('/account/summary', tokens.accessToken)
+              const data = res.data
+              if (data && tokens.user.userId) {
+                writeCachedAccountSummary(tokens.user.userId, {
+                  balance: Number(data.balance ?? 0),
+                  credit: Number(data.credit ?? 0),
+                  equity: Number(data.equity ?? 0),
+                  freeMargin: Number(data.freeMargin ?? 0),
+                  margin: Number(data.margin ?? 0),
+                  marginLevel: data.marginLevel == null ? null : Number(data.marginLevel),
+                  leverage: data.leverage != null ? Number(data.leverage) : undefined,
+                  profit: Number(data.netFloatingPl ?? data.profit ?? 0),
+                  floatingProfit: Number(data.floatingProfit ?? 0),
+                  floatingLoss: Number(data.floatingLoss ?? 0),
+                  marginAlert: data.marginAlert ?? { level: 'ok' },
+                })
+              }
+              return data
+            },
+          })
+          .catch(() => undefined)
         setStatus(
           tokens.user.status && tokens.user.status !== 'ACTIVE'
             ? 'Signed in. Waiting for admin approval before trading.'
@@ -105,6 +134,13 @@ export function AuthModal({ open, onClose }: Props) {
         user: { ...response.user, role }, 
         accessToken: response.accessToken, 
         refreshToken: response.refreshToken 
+      })
+      void queryClient.prefetchQuery({
+        queryKey: ['account-summary'],
+        queryFn: async () => {
+          const res = await apiClient.get<{ data: any }>('/account/summary', response.accessToken)
+          return res.data
+        },
       })
       
       setStatus(

@@ -176,7 +176,7 @@ async function settleClose(
 }
 
 /** Fast equity refresh from DB numbers only (no external quote calls). */
-async function applyAccountTotals(userId: string): Promise<AccountMetrics | null> {
+export async function applyAccountTotals(userId: string): Promise<AccountMetrics | null> {
   const [user, positions] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.position.findMany({ where: { userId, status: 'OPEN' } }),
