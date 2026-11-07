@@ -76,12 +76,12 @@ export default function TradingPlatform() {
     accessToken && accountSummary
       ? {
           balance: Number(accountSummary.balance),
-          credit: 0,
+          credit: Number((accountSummary as any).credit ?? 0),
           equity: Number(accountSummary.equity),
           freeMargin: Number(accountSummary.freeMargin),
           margin: Number(accountSummary.margin),
           marginLevel: Number(accountSummary.marginLevel),
-          profit: Number((accountSummary as any).profit ?? 0),
+          profit: Number((accountSummary as any).profit ?? 0), // floating P/L
         }
       : { ...EMPTY_TRADING_ACCOUNT }
   const [lotSize, setLotSize] = useState(0.01)
@@ -391,6 +391,7 @@ export default function TradingPlatform() {
   const mobileChartProps = {
     account: {
       balance: account.balance,
+      credit: account.credit,
       equity: account.equity,
       freeMargin: account.freeMargin,
       margin: account.margin,

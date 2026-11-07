@@ -18,6 +18,7 @@ model User {
   role            String          @default("USER")
   status          String          @default("PENDING")
   balance         Decimal         @default(0)
+  credit          Decimal         @default(0)
   equity          Decimal         @default(0)
   margin          Decimal         @default(0)
   freeMargin      Decimal         @default(0)

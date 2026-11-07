@@ -109,6 +109,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
         role: 'USER',
         status: 'PENDING',
         balance: 0,
+        credit: 0,
         equity: 0,
         margin: 0,
         freeMargin: 0,
@@ -188,6 +189,7 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
         fullName: true,
         email: true,
         balance: true,
+        credit: true,
         equity: true,
         freeMargin: true,
         margin: true,
@@ -199,6 +201,7 @@ async function handleAccount(req: NextRequest, parts: string[]): Promise<Handler
       data: user && {
         ...user,
         balance: Number(user.balance),
+        credit: Number(user.credit),
         equity: Number(user.equity),
         freeMargin: Number(user.freeMargin),
         margin: Number(user.margin),
@@ -680,8 +683,7 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
         ...(credit > 0
           ? {
               balance: Number(user.balance) + credit,
-              equity: Number(user.balance) + credit,
-              freeMargin: Number(user.balance) + credit,
+              // Equity / free margin refreshed below via recalculateAccount
               margin: 0,
               marginLevel: 0,
             }
@@ -694,6 +696,7 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
         role: true,
         status: true,
         balance: true,
+        credit: true,
         equity: true,
         freeMargin: true,
         createdAt: true,
@@ -714,12 +717,16 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
       })
     }
 
+    const metrics = await recalculateAccount(user.id)
     return json({
       data: {
         ...updated,
-        balance: Number(updated.balance),
-        equity: Number(updated.equity),
-        freeMargin: Number(updated.freeMargin),
+        balance: metrics?.balance ?? Number(updated.balance),
+        credit: metrics?.credit ?? Number(updated.credit),
+        equity: metrics?.equity ?? Number(updated.equity),
+        freeMargin: metrics?.freeMargin ?? Number(updated.freeMargin),
+        margin: metrics?.margin ?? 0,
+        marginLevel: metrics?.marginLevel ?? 0,
       },
     })
   }

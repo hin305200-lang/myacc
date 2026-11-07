@@ -333,7 +333,9 @@ export class TradingEngineService extends EventEmitter {
 
       const margin = openPositions.reduce((sum, pos) => sum + Number(pos.marginUsed), 0)
       const floating = openPositions.reduce((sum, pos) => sum + Number(pos.profit), 0)
-      const equity = Number(user.balance) + floating
+      const credit = Number((user as any).credit ?? 0)
+      // Equity = Balance + Credit + Floating P/L
+      const equity = Number(user.balance) + credit + floating
       const freeMargin = equity - margin
       const marginLevel = margin > 0 ? (equity / margin) * 100 : 0
 

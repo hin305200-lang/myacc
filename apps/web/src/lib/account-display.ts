@@ -5,8 +5,24 @@ export const EMPTY_TRADING_ACCOUNT = {
   freeMargin: 0,
   margin: 0,
   marginLevel: 0,
-  profit: 0,
+  profit: 0, // floating P/L
 } as const
+
+/** Equity = Balance + Credit + Floating P/L */
+export function computeEquity(balance: number, credit: number, floatingPl: number) {
+  return balance + credit + floatingPl
+}
+
+/** Free Margin = Equity − Used Margin */
+export function computeFreeMargin(equity: number, usedMargin: number) {
+  return equity - usedMargin
+}
+
+/** Margin Level % = (Equity / Used Margin) × 100 */
+export function computeMarginLevel(equity: number, usedMargin: number) {
+  if (usedMargin <= 0) return 0
+  return (equity / usedMargin) * 100
+}
 
 export function formatUsd(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)

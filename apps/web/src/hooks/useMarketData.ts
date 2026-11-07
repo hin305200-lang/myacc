@@ -139,11 +139,13 @@ export type AccountSummary = {
   fullName?: string
   email?: string
   balance: number
+  credit: number
   equity: number
   freeMargin: number
   margin: number
   marginLevel: number
   leverage?: number
+  profit?: number // floating P/L
 }
 
 function normalizeAccountSummary(raw: unknown): AccountSummary | undefined {
@@ -154,11 +156,13 @@ function normalizeAccountSummary(raw: unknown): AccountSummary | undefined {
     fullName: o.fullName as string | undefined,
     email: o.email as string | undefined,
     balance: Number(o.balance ?? 0),
+    credit: Number(o.credit ?? 0),
     equity: Number(o.equity ?? 0),
     freeMargin: Number(o.freeMargin ?? 0),
     margin: Number(o.margin ?? 0),
     marginLevel: Number(o.marginLevel ?? 0),
     leverage: o.leverage != null ? Number(o.leverage) : undefined,
+    profit: o.profit != null ? Number(o.profit) : 0,
   }
 }
 

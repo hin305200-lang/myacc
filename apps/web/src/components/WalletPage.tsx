@@ -156,6 +156,12 @@ export default function WalletPage({ appearance = 'terminal' }: { appearance?: P
             <div className={`text-xl font-bold font-mono ${t.heading}`}>${balance.toFixed(2)}</div>
           </div>
           <div className={t.cardMuted}>
+            <div className={`text-xs ${t.label} mb-1`}>Credit</div>
+            <div className={`text-xl font-bold font-mono ${t.heading}`}>
+              ${Number((account as any)?.credit ?? 0).toFixed(2)}
+            </div>
+          </div>
+          <div className={t.cardMuted}>
             <div className={`text-xs ${t.label} mb-1`}>In positions (margin)</div>
             <div className={`text-xl font-bold font-mono ${t.heading}`}>
               ${(dashboard?.invested ?? margin).toFixed(2)}

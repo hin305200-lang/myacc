@@ -45,6 +45,7 @@ export type MobileBankTab =
 
 interface AccountSummary {
   balance: number
+  credit: number
   equity: number
   freeMargin: number
   margin: number
@@ -134,10 +135,15 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
         </div>
 
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <MetricChip label="Equity" value={formatUsdIfAuth(props.account.equity, auth)} highlight />
           <MetricChip label="Balance" value={formatUsdIfAuth(props.account.balance, auth)} />
-          <MetricChip label="Free margin" value={formatUsdIfAuth(props.account.freeMargin, auth)} />
+          <MetricChip label="Credit" value={formatUsdIfAuth(props.account.credit, auth)} />
+          <MetricChip label="Equity" value={formatUsdIfAuth(props.account.equity, auth)} highlight />
           <MetricChip label="Margin" value={formatUsdIfAuth(props.account.margin, auth)} />
+          <MetricChip label="Free margin" value={formatUsdIfAuth(props.account.freeMargin, auth)} />
+          <MetricChip
+            label="Margin level"
+            value={formatMarginLevelIfAuth(props.account.marginLevel, auth)}
+          />
           <MetricChip
             label="P/L"
             value={formatPlIfAuth(props.account.profit, auth)}

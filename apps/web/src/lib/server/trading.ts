@@ -51,8 +51,11 @@ export function calculateMargin({
   leverage: number
   symbol: string
 }) {
+  // Margin = Trade Value / Leverage
+  // Trade Value = lots × contract size × price
   const lev = Math.max(1, leverage || DEFAULT_LEVERAGE)
-  return (lotSize * contractSize(symbol) * price) / lev
+  const tradeValue = lotSize * contractSize(symbol) * price
+  return tradeValue / lev
 }
 
 function calculateCommission(symbol: string, lotSize: number, price: number) {
@@ -74,6 +77,7 @@ export function calculateProfit(input: {
   currentPrice: number
   symbol: string
 }) {
+  // P/L = price diff × contract size × lots
   const diff =
     input.side === 'BUY'
       ? input.currentPrice - input.openPrice
@@ -82,18 +86,31 @@ export function calculateProfit(input: {
 }
 
 function roundMoney(n: number) {
-  return Math.round(n * 100) / 100
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
+export type AccountMetrics = {
+  balance: number
+  credit: number
+  equity: number
+  margin: number
+  freeMargin: number
+  marginLevel: number
+  leverage: number
+  floatingProfit: number
 }
 
 /**
- * Standard trading-account metrics:
- * - Balance: settled cash (after commissions / closed P/L)
- * - Equity: balance + floating P/L
- * - Margin: sum of margin used by open positions
- * - Free margin: equity − margin
- * - Margin level: (equity / margin) × 100%  (0 when no margin)
+ * Exact trading-account formulas:
+ * Balance     = settled cash (deposits, withdrawals, closed P/L, commissions)
+ * Credit      = broker bonus (not part of Balance)
+ * Floating P/L = unrealized open-trade P/L
+ * Equity      = Balance + Credit + Floating P/L
+ * Margin      = sum of reserved collateral for open trades
+ * Free Margin = Equity − Margin
+ * Margin Level = (Equity / Margin) × 100   (0 when no margin)
  */
-export async function recalculateAccount(userId: string) {
+export async function recalculateAccount(userId: string): Promise<AccountMetrics | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return null
 
@@ -121,6 +138,7 @@ export async function recalculateAccount(userId: string) {
       symbol: pos.symbol,
     })
 
+    // Margin uses open/entry price trade value ÷ leverage
     const marginUsed = calculateMargin({
       lotSize: Number(pos.lotSize),
       price: Number(pos.openPrice),
@@ -142,7 +160,8 @@ export async function recalculateAccount(userId: string) {
   }
 
   const balance = Number(user.balance)
-  const equity = roundMoney(balance + floating)
+  const credit = Number((user as any).credit ?? 0)
+  const equity = roundMoney(balance + credit + floating)
   margin = roundMoney(margin)
   const freeMargin = roundMoney(equity - margin)
   const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : 0
@@ -160,6 +179,7 @@ export async function recalculateAccount(userId: string) {
 
   return {
     balance: roundMoney(Number(updated.balance)),
+    credit: roundMoney(credit),
     equity: Number(updated.equity),
     margin: Number(updated.margin),
     freeMargin: Number(updated.freeMargin),
@@ -190,7 +210,6 @@ export async function placeMarketOrder(
     throw new Error('Account is not active. Please wait for admin approval before trading.')
   }
 
-  // Fresh metrics before risk checks
   const metrics = await recalculateAccount(userId)
   const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
 
@@ -221,7 +240,7 @@ export async function placeMarketOrder(
   const available = metrics?.freeMargin ?? Number(user.freeMargin)
   if (available < marginRequired) {
     throw new Error(
-      `Insufficient margin. Required: $${marginRequired.toFixed(2)}, Available: $${available.toFixed(2)}`
+      `Insufficient free margin. Required: $${roundMoney(marginRequired).toFixed(2)}, Available: $${roundMoney(available).toFixed(2)}`
     )
   }
 
@@ -243,13 +262,26 @@ export async function placeMarketOrder(
     },
   })
 
-  // Commission settles against balance; margin/equity/freeMargin come from recalculate
+  // Commission settles into Balance (closed/settled cash), not floating P/L
   await prisma.user.update({
     where: { id: userId },
     data: {
       balance: roundMoney(Number(user.balance) - commission),
     },
   })
+
+  if (commission !== 0) {
+    await prisma.transaction.create({
+      data: {
+        userId,
+        type: 'ADJUSTMENT',
+        amount: -commission,
+        balanceBefore: Number(user.balance),
+        balanceAfter: roundMoney(Number(user.balance) - commission),
+        note: `Commission ${symbol} ${input.side} ${input.lotSize} lot`,
+      },
+    })
+  }
 
   await recalculateAccount(userId)
   return position
@@ -291,6 +323,7 @@ export async function closePosition(positionId: string, userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return { success: true, profit }
 
+  // Closed P/L settles into Balance
   const newBalance = roundMoney(Number(user.balance) + profit)
 
   await prisma.user.update({
