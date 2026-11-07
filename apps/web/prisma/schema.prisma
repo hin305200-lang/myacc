@@ -1,0 +1,147 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  passwordHash    String
+  fullName        String
+  phoneNumber     String?
+  role            String          @default("USER")
+  status          String          @default("PENDING")
+  balance         Decimal         @default(0)
+  equity          Decimal         @default(0)
+  margin          Decimal         @default(0)
+  freeMargin      Decimal         @default(0)
+  marginLevel      Decimal         @default(0)
+  leverage        Int             @default(100)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  positions       Position[]
+  closedTrades    ClosedTrade[]
+  transactions    Transaction[]
+  depositRequests DepositRequest[]
+  withdrawalRequests WithdrawalRequest[]
+  favorites       UserFavorite[]
+  messages        Message[]
+}
+
+model Position {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  symbol       String
+  side         String
+  lotSize      Decimal
+  openPrice    Decimal
+  currentPrice Decimal
+  stopLoss     Decimal?
+  takeProfit   Decimal?
+  marginUsed   Decimal
+  swap         Decimal   @default(0)
+  commission   Decimal   @default(0)
+  profit       Decimal   @default(0)
+  status       String    @default("OPEN")
+  openedAt     DateTime  @default(now())
+  closedAt     DateTime?
+  closePrice   Decimal?
+}
+
+model ClosedTrade {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  symbol     String
+  side       String
+  lotSize    Decimal
+  openPrice  Decimal
+  closePrice Decimal
+  profit     Decimal   @default(0)
+  swap       Decimal   @default(0)
+  commission Decimal   @default(0)
+  openedAt   DateTime
+  closedAt   DateTime  @default(now())
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  type          String
+  amount        Decimal
+  balanceBefore Decimal
+  balanceAfter  Decimal
+  note          String?
+  createdAt     DateTime @default(now())
+}
+
+model AdminActionLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String
+  payload   String
+  createdAt DateTime @default(now())
+}
+
+model GameModeAction {
+  id         String   @id @default(cuid())
+  adminId    String
+  action     String
+  parameters String
+  createdAt  DateTime @default(now())
+}
+
+model DepositRequest {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  amount     Decimal
+  status     String   @default("PENDING")
+  note       String?
+  createdAt  DateTime @default(now())
+  resolvedAt DateTime?
+}
+
+model WithdrawalRequest {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  amount        Decimal
+  status        String   @default("PENDING")
+  payoutDetails String?
+  note          String?
+  createdAt     DateTime @default(now())
+  resolvedAt    DateTime?
+}
+
+model UserFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  symbol    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, symbol])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String
+  adminId   String?
+  fromRole  String   // 'USER' or 'ADMIN'
+  content   String
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([adminId, createdAt])
+}

@@ -6,12 +6,12 @@ export function isProductionSiteHost(hostname: string): boolean {
 
 /** REST API base URL (no trailing slash). Empty string = same-origin (use path prefix). */
 export function getApiBaseUrl(): string {
+  // Production domain always uses same-origin /backend (local Prisma auth + optional upstream proxy).
+  if (typeof window !== 'undefined' && isProductionSiteHost(window.location.hostname)) {
+    return '/backend'
+  }
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '')
-  }
-  if (typeof window !== 'undefined' && isProductionSiteHost(window.location.hostname)) {
-    // Proxied by Next.js → apps/web/next.config.mjs when API_PROXY_TARGET is set on Vercel
-    return '/backend'
   }
   return 'http://localhost:4000'
 }

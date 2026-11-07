@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { tryHandleLocalApi } from '@/lib/server/local-api'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -6,16 +7,21 @@ export const dynamic = 'force-dynamic'
 function resolveApiTarget(): string | null {
   const raw = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL
   if (!raw?.trim()) return null
+  // Don't proxy to our own /backend path or relative URLs
+  if (!/^https?:\/\//i.test(raw.trim())) return null
   return raw.replace(/\/$/, '')
 }
 
 async function proxyRequest(req: NextRequest, pathSegments: string[]) {
+  const local = await tryHandleLocalApi(req, pathSegments)
+  if (local) return local
+
   const target = resolveApiTarget()
   if (!target) {
     return NextResponse.json(
       {
         error:
-          'Trading API is not configured. Deploy apps/api (e.g. Render) and set API_PROXY_TARGET on Vercel.',
+          'Trading API is not configured. Set DATABASE_URL and JWT_SECRET on Vercel (auth/account), or deploy apps/api and set API_PROXY_TARGET.',
       },
       { status: 503 }
     )
