@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { tryHandleLocalApi } from '@/lib/server/local-api'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,8 +12,20 @@ function resolveApiTarget(): string | null {
 }
 
 async function proxyRequest(req: NextRequest, pathSegments: string[]) {
-  const local = await tryHandleLocalApi(req, pathSegments)
-  if (local) return local
+  try {
+    const { tryHandleLocalApi } = await import('@/lib/server/local-api')
+    const local = await tryHandleLocalApi(req, pathSegments)
+    if (local) return local
+  } catch (error: any) {
+    console.error('[backend] local api failed', error)
+    return NextResponse.json(
+      {
+        error: 'Local trading API failed to start',
+        detail: error?.message || String(error),
+      },
+      { status: 500 }
+    )
+  }
 
   const target = resolveApiTarget()
   if (!target) {

@@ -1,7 +1,7 @@
-import argon2 from 'argon2'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from './prisma'
+import { hashPassword, verifyPassword } from './password'
 import { signAccessToken, signRefreshToken, verifyAccessToken, type AuthPayload } from './auth-tokens'
 
 type HandlerResult = NextResponse | null
@@ -80,7 +80,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
       return json({ error: 'Email already registered' }, 400)
     }
 
-    const passwordHash = await argon2.hash(parsed.data.password)
+    const passwordHash = await hashPassword(parsed.data.password)
     const startingBalance = 250
     const user = await prisma.user.create({
       data: {
@@ -134,7 +134,7 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
       return json({ error: 'Invalid credentials' }, 401)
     }
 
-    const valid = await argon2.verify(user.passwordHash, parsed.data.password)
+    const valid = await verifyPassword(user.passwordHash, parsed.data.password)
     if (!valid) {
       return json({ error: 'Invalid credentials' }, 401)
     }
