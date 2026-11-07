@@ -31,16 +31,18 @@ export function AuthModal({ open, onClose }: Props) {
   useEffect(() => {
     if (mode === 'register') {
       setFullName('')
+      setPhoneNumber('')
       setEmail('')
       setPassword('')
     }
   }, [mode])
 
-  const handleSubmit = async (overrides?: Partial<{ email: string; password: string; fullName: string; mode: AuthMode }>) => {
-    const nextMode = overrides?.mode ?? mode
-    const nextEmail = overrides?.email ?? email
-    const nextPassword = overrides?.password ?? password
-    const nextFullName = overrides?.fullName ?? fullName
+  const handleSubmit = async () => {
+    const nextMode = mode
+    const nextEmail = email
+    const nextPassword = password
+    const nextFullName = fullName
+    const nextPhone = phoneNumber.trim()
 
     if (!nextEmail || !nextPassword) {
       setStatus('Please enter email and password')
@@ -49,6 +51,11 @@ export function AuthModal({ open, onClose }: Props) {
 
     if (nextMode === 'register' && !nextFullName) {
       setStatus('Please enter your full name')
+      return
+    }
+
+    if (nextMode === 'register' && nextPhone.length < 6) {
+      setStatus('Please enter a valid phone number')
       return
     }
 
@@ -85,7 +92,7 @@ export function AuthModal({ open, onClose }: Props) {
         fullName: nextFullName || 'New Trader',
         email: nextEmail,
         password: nextPassword,
-        phoneNumber: phoneNumber.trim() || undefined,
+        phoneNumber: nextPhone,
       })
       
       // Ensure we have the required fields
@@ -120,15 +127,6 @@ export function AuthModal({ open, onClose }: Props) {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleDemo = async () => {
-    const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL ?? 'demo@nexus.trade'
-    const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? 'password123'
-    setEmail(demoEmail)
-    setPassword(demoPassword)
-    setMode('login')
-    await handleSubmit({ email: demoEmail, password: demoPassword, mode: 'login' })
   }
 
   if (!open) return null
@@ -181,13 +179,15 @@ export function AuthModal({ open, onClose }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Phone (optional)</label>
+                <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Phone number</label>
                 <input
                   type="tel"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 focus:border-accent-purple focus:bg-white/10"
                   placeholder="+1 555 000 0000"
+                  minLength={6}
+                  required
                 />
               </div>
             </>
@@ -221,14 +221,7 @@ export function AuthModal({ open, onClose }: Props) {
             )}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              onClick={handleDemo}
-              className="inline-flex items-center gap-2 text-xs text-accent-cyan hover:underline"
-            >
-              <span className="h-2 w-2 rounded-full bg-accent-cyan animate-pulse-glow" />
-              Use instant demo login
-            </button>
+          <div className="flex justify-end">
             <button
               onClick={() => void handleSubmit()}
               disabled={loading}
