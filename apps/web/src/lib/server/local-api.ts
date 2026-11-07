@@ -85,10 +85,15 @@ async function buildTokens(user: {
 async function requireAdmin(req: NextRequest): Promise<AuthPayload | NextResponse> {
   const auth = await requireUser(req)
   if (auth instanceof NextResponse) return auth
-  if (auth.role !== 'ADMIN') {
+  // Trust DB role (JWT can be stale after promotion); identity still comes from the token
+  const dbUser = await prisma.user.findUnique({
+    where: { id: auth.userId },
+    select: { role: true, status: true },
+  })
+  if (!dbUser || String(dbUser.role).toUpperCase() !== 'ADMIN') {
     return json({ error: 'Admin access required' }, 403)
   }
-  return auth
+  return { ...auth, role: 'ADMIN' }
 }
 
 async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerResult> {
@@ -180,6 +185,10 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
       },
     })
     if (!dbUser) return json({ error: 'Unauthorized' }, 401)
+    // If role/status changed in DB, mint fresh tokens so admin APIs keep working
+    const roleChanged =
+      String(auth.role).toUpperCase() !== String(dbUser.role).toUpperCase()
+    const tokens = roleChanged ? await buildTokens(dbUser) : null
     return json({
       user: {
         userId: dbUser.id,
@@ -189,6 +198,9 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
         fullName: dbUser.fullName,
         kycStatus: dbUser.kycStatus,
       },
+      ...(tokens
+        ? { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }
+        : {}),
     })
   }
 

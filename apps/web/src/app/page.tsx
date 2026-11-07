@@ -305,6 +305,8 @@ export default function TradingPlatform() {
             status?: string
             kycStatus?: string
           }
+          accessToken?: string
+          refreshToken?: string
         }>('/auth/me', accessToken)
         if (cancelled || !me?.user) return
         const role = String(me.user.role || 'USER').toUpperCase() as 'USER' | 'ADMIN'
@@ -316,8 +318,9 @@ export default function TradingPlatform() {
             status: me.user.status,
             kycStatus: me.user.kycStatus,
           },
-          accessToken,
-          refreshToken: useAuthStore.getState().refreshToken || accessToken,
+          accessToken: me.accessToken || accessToken,
+          refreshToken:
+            me.refreshToken || useAuthStore.getState().refreshToken || accessToken,
         })
       } catch {
         const savedRefresh = useAuthStore.getState().refreshToken

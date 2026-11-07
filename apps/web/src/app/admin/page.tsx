@@ -93,12 +93,14 @@ export default function AdminDashboard() {
     return unsub
   }, [setHasHydrated])
 
+  const isAdminRole = String(user?.role || '').toUpperCase() === 'ADMIN'
+
   useEffect(() => {
     if (!_hasHydrated) return
-    if (!accessToken || user?.role !== 'ADMIN') router.replace('/')
-  }, [_hasHydrated, accessToken, user, router])
+    if (!accessToken || !isAdminRole) router.replace('/')
+  }, [_hasHydrated, accessToken, isAdminRole, router])
 
-  const isAdminReady = _hasHydrated && !!accessToken && user?.role === 'ADMIN'
+  const isAdminReady = _hasHydrated && !!accessToken && isAdminRole
 
   const {
     data: users,
@@ -106,13 +108,39 @@ export default function AdminDashboard() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['admin-users'],
+    queryKey: ['admin-users', accessToken],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: AdminUser[] }>('/admin/users', accessToken ?? undefined)
-      return res.data
+      // If access expired, silently refresh then retry once
+      const run = async (token: string) => {
+        const res = await apiClient.get<{ data: AdminUser[] }>('/admin/users', token)
+        return res.data
+      }
+      try {
+        return await run(accessToken!)
+      } catch (err: any) {
+        const refresh = useAuthStore.getState().refreshToken
+        if (!refresh) throw err
+        try {
+          const tokens = await apiClient.post<{
+            accessToken: string
+            refreshToken: string
+            user: { userId: string; email: string; role: string; status?: string; kycStatus?: string }
+          }>('/auth/refresh', { refreshToken: refresh })
+          const role = String(tokens.user.role || 'USER').toUpperCase() as 'USER' | 'ADMIN'
+          useAuthStore.getState().setCredentials({
+            user: { ...tokens.user, role },
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+          })
+          return await run(tokens.accessToken)
+        } catch {
+          throw err
+        }
+      }
     },
     enabled: isAdminReady,
     refetchInterval: 8000,
+    retry: 1,
   })
 
   const { data: deposits, refetch: refetchDeposits } = useQuery({
@@ -345,15 +373,33 @@ export default function AdminDashboard() {
         {tab === 'approvals' && (
           <section className="space-y-3">
             <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
-              <strong>{pendingUsers.length}</strong> account(s) waiting for trading approval. PENDING
-              users cannot trade until you approve.
+              <strong>{users?.length ?? 0}</strong> total account(s) ·{' '}
+              <strong>{pendingUsers.length}</strong> waiting for trading approval (PENDING). All
+              registered users are listed below.
             </div>
             {isLoading && (
               <div className="flex items-center gap-2 text-[#94a3b8] text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading users…
               </div>
             )}
-            {error && <p className="text-red-400 text-sm">Failed to load users</p>}
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300 space-y-2">
+                <p>Failed to load users: {(error as Error)?.message || 'Unknown error'}</p>
+                <p className="text-xs text-red-200/80">
+                  Sign out and log in again with your admin account, then reopen /admin.
+                </p>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded bg-red-500/20 text-xs"
+                  onClick={() => void refetch()}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {!isLoading && !error && (users?.length ?? 0) === 0 && (
+              <p className="text-sm text-[#94a3b8]">No users found in the database yet.</p>
+            )}
 
             {/* Mobile cards */}
             <div className="grid gap-3 md:hidden">
