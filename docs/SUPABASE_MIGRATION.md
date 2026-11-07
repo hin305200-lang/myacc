@@ -2,6 +2,12 @@
 
 Your **Next.js app does not talk to the database directly** — the **Fastify API** (`apps/api`) uses Prisma. Migrating the API database is enough; the web app keeps calling `NEXT_PUBLIC_API_URL` as today.
 
+**Connected project:** `fuefkgitvfkvmkyttxzc` (region `ap-northeast-1`)  
+**URL:** `https://fuefkgitvfkvmkyttxzc.supabase.co`  
+**Client key:** publishable only (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) — never commit `service_role`.
+
+App tables (`User`, `Position`, `ClosedTrade`, `Transaction`, wallet/admin/message tables) are already created in Supabase with RLS enabled. Auth for trading remains Fastify JWT + Prisma (argon2); Supabase Auth is available if you add it later.
+
 ## 1. Create Supabase project
 
 1. [supabase.com](https://supabase.com) → New project → save the database password.

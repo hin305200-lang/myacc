@@ -12,6 +12,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "@swc/helpers": "^0.5.5",
     "@tanstack/react-query": "^5.90.11",
     "browserslist": "^4.28.1",
