@@ -6,6 +6,6 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "instant-account-metrics-20261108"
+    "REDEPLOY_STAMP": "profile-save-local-api-20261108"
   }
 }

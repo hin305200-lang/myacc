@@ -1241,6 +1241,87 @@ async function handleAdmin(req: NextRequest, parts: string[]): Promise<HandlerRe
   return null
 }
 
+async function handleProfile(req: NextRequest, parts: string[]): Promise<HandlerResult> {
+  // /profile
+  if (parts.length !== 1) return null
+  const auth = await requireUser(req)
+  if (auth instanceof NextResponse) return auth
+
+  if (req.method === 'GET') {
+    const user = await prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phoneNumber: true,
+        leverage: true,
+        status: true,
+        kycStatus: true,
+      },
+    })
+    if (!user) return json({ error: 'User not found' }, 404)
+    return json({ data: user })
+  }
+
+  if (req.method === 'PUT' || req.method === 'PATCH') {
+    const body = await readJsonBody(req)
+    const parsed = z
+      .object({
+        fullName: z.string().min(3).max(100).optional(),
+        email: z.string().email().optional(),
+        phoneNumber: z.string().min(6).max(40).optional(),
+        leverage: z.number().int().min(1).max(1000).optional(),
+      })
+      .safeParse(body)
+    if (!parsed.success) return json({ error: parsed.error.flatten() }, 400)
+
+    const data: {
+      fullName?: string
+      email?: string
+      phoneNumber?: string
+      leverage?: number
+    } = {}
+    if (parsed.data.fullName) data.fullName = parsed.data.fullName.trim()
+    if (parsed.data.email) data.email = parsed.data.email.toLowerCase().trim()
+    if (parsed.data.phoneNumber !== undefined) data.phoneNumber = parsed.data.phoneNumber.trim()
+    if (parsed.data.leverage !== undefined) data.leverage = parsed.data.leverage
+
+    if (Object.keys(data).length === 0) {
+      return json({ error: 'No fields to update' }, 400)
+    }
+
+    if (data.email) {
+      const taken = await prisma.user.findFirst({
+        where: { email: data.email, NOT: { id: auth.userId } },
+        select: { id: true },
+      })
+      if (taken) return json({ error: 'Email is already in use' }, 409)
+    }
+
+    try {
+      const updated = await prisma.user.update({
+        where: { id: auth.userId },
+        data,
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phoneNumber: true,
+          leverage: true,
+          status: true,
+          kycStatus: true,
+        },
+      })
+      return json({ data: updated })
+    } catch (error: any) {
+      return json({ error: error?.message || 'Failed to update profile' }, 400)
+    }
+  }
+
+  return null
+}
+
 /**
  * Serves auth/account/health from this Next.js deployment when DATABASE_URL + JWT_SECRET are set.
  * Returns null when the path should fall through to an upstream proxy (if configured).
@@ -1273,6 +1354,7 @@ export async function tryHandleLocalApi(
     if (root === 'market') return await handleMarket(req, parts)
     if (root === 'admin') return await handleAdmin(req, parts)
     if (root === 'chat') return await handleChat(req, parts)
+    if (root === 'profile') return await handleProfile(req, parts)
   } catch (error: any) {
     console.error('[local-api]', error)
     return json({ error: error?.message || 'Internal server error' }, 500)
