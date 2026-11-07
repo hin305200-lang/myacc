@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from './prisma'
 import { hashPassword, verifyPassword } from './password'
-import { signAccessToken, signRefreshToken, verifyAccessToken, type AuthPayload } from './auth-tokens'
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+  type AuthPayload,
+} from './auth-tokens'
 import { getCandles, getMarketCatalog, getMarketSnapshot } from './market-prices'
 import { closePosition, placeMarketOrder, recalculateAccount } from './trading'
 
@@ -168,6 +174,21 @@ async function handleAuth(req: NextRequest, parts: string[]): Promise<HandlerRes
         fullName: dbUser.fullName,
       },
     })
+  }
+
+  // Exchange refresh token for a new access + refresh pair (keeps users logged in)
+  if (req.method === 'POST' && action === 'refresh') {
+    const body = await readJsonBody(req)
+    const refresh = typeof body?.refreshToken === 'string' ? body.refreshToken : null
+    if (!refresh) return json({ error: 'Missing refresh token' }, 400)
+    try {
+      const payload = await verifyRefreshToken(refresh)
+      const dbUser = await prisma.user.findUnique({ where: { id: payload.userId } })
+      if (!dbUser) return json({ error: 'Unauthorized' }, 401)
+      return json(await buildTokens(dbUser))
+    } catch {
+      return json({ error: 'Session expired. Please sign in again.' }, 401)
+    }
   }
 
   return null

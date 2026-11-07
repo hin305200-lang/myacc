@@ -20,7 +20,7 @@ type AdminUser = {
 }
 
 export default function AdminDashboard() {
-  const { accessToken, user } = useAuthStore()
+  const { accessToken, user, _hasHydrated, setHasHydrated } = useAuthStore()
   const router = useRouter()
   const [gameUserId, setGameUserId] = useState('')
   const [gameAmount, setGameAmount] = useState(50)
@@ -29,10 +29,17 @@ export default function AdminDashboard() {
   const [pricePips, setPricePips] = useState(10)
 
   useEffect(() => {
+    const unsub = useAuthStore.persist.onFinishHydration(() => setHasHydrated(true))
+    if (useAuthStore.persist.hasHydrated()) setHasHydrated(true)
+    return unsub
+  }, [setHasHydrated])
+
+  useEffect(() => {
+    if (!_hasHydrated) return
     if (!accessToken || user?.role !== 'ADMIN') {
       router.replace('/')
     }
-  }, [accessToken, user, router])
+  }, [_hasHydrated, accessToken, user, router])
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-users'],
@@ -40,10 +47,10 @@ export default function AdminDashboard() {
       const res = await apiClient.get<{ data: AdminUser[] }>('/admin/users', accessToken ?? undefined)
       return res.data
     },
-    enabled: !!accessToken && user?.role === 'ADMIN',
+    enabled: _hasHydrated && !!accessToken && user?.role === 'ADMIN',
   })
 
-  if (!accessToken || user?.role !== 'ADMIN') {
+  if (!_hasHydrated || !accessToken || user?.role !== 'ADMIN') {
     return null
   }
 

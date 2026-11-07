@@ -14,24 +14,7 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret)
 }
 
-export async function signAccessToken(payload: AuthPayload) {
-  return new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('15m')
-    .sign(getJwtSecret())
-}
-
-export async function signRefreshToken(payload: AuthPayload) {
-  return new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(getJwtSecret())
-}
-
-export async function verifyAccessToken(token: string): Promise<AuthPayload> {
-  const { payload } = await jwtVerify(token, getJwtSecret())
+function parsePayload(payload: Record<string, unknown>): AuthPayload {
   const userId = typeof payload.userId === 'string' ? payload.userId : null
   const email = typeof payload.email === 'string' ? payload.email : null
   const role = typeof payload.role === 'string' ? payload.role : 'USER'
@@ -39,4 +22,31 @@ export async function verifyAccessToken(token: string): Promise<AuthPayload> {
     throw new Error('Invalid token')
   }
   return { userId, email, role }
+}
+
+export async function signAccessToken(payload: AuthPayload) {
+  // Long-lived enough that refresh doesn't log users out mid-session
+  return new SignJWT({ ...payload, typ: 'access' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(getJwtSecret())
+}
+
+export async function signRefreshToken(payload: AuthPayload) {
+  return new SignJWT({ ...payload, typ: 'refresh' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('30d')
+    .sign(getJwtSecret())
+}
+
+export async function verifyAccessToken(token: string): Promise<AuthPayload> {
+  const { payload } = await jwtVerify(token, getJwtSecret())
+  return parsePayload(payload as Record<string, unknown>)
+}
+
+export async function verifyRefreshToken(token: string): Promise<AuthPayload> {
+  const { payload } = await jwtVerify(token, getJwtSecret())
+  return parsePayload(payload as Record<string, unknown>)
 }

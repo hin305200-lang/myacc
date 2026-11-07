@@ -62,7 +62,8 @@ const symbolMeta: Record<string, { icon: string }> = {
 }
 
 export default function TradingPlatform() {
-  const { user, accessToken, setCredentials, logout: storeLogout } = useAuthStore()
+  const { user, accessToken, refreshToken, setCredentials, logout: storeLogout, _hasHydrated } =
+    useAuthStore()
   const queryClient = useQueryClient()
   const logout = () => {
     storeLogout()
@@ -101,6 +102,22 @@ export default function TradingPlatform() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
   const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL ?? 'demo@nexus.trade'
   const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? 'password123'
+
+  // Mark hydrated if persist finished before React subscribed
+  useEffect(() => {
+    const unsub = useAuthStore.persist.onFinishHydration(() => {
+      useAuthStore.getState().setHasHydrated(true)
+    })
+    if (useAuthStore.persist.hasHydrated()) {
+      useAuthStore.getState().setHasHydrated(true)
+    }
+    return unsub
+  }, [])
+
+  // Once logged in, never leave the auth modal open
+  useEffect(() => {
+    if (accessToken) setShowAuth(false)
+  }, [accessToken])
 
   const restSymbols = useSymbolsWithSocket()
   const { ticks: liveTicks, connected: liveFeedConnected } = useLiveMarketTicks(true)
@@ -141,15 +158,56 @@ export default function TradingPlatform() {
     })
   }, [account.marginAlert])
 
+  // Wait for localStorage rehydrate before deciding to show login
   useEffect(() => {
-    if (accessToken || authAttempted) return
-    if (!isDemoAutoLoginEnabled()) {
+    if (!_hasHydrated || authAttempted) return
+
+    const boot = async () => {
       setAuthAttempted(true)
-      setShowAuth(true)
-      return
-    }
-    const ensureAuth = async () => {
-      setAuthAttempted(true)
+      const state = useAuthStore.getState()
+      const savedAccess = state.accessToken
+      const savedRefresh = state.refreshToken
+
+      // Session already in localStorage — stay logged in (optionally refresh if expired)
+      if (savedAccess || savedRefresh) {
+        if (savedAccess) {
+          try {
+            await apiClient.get<{ user: UserPayload }>('/auth/me', savedAccess)
+            setShowAuth(false)
+            return
+          } catch {
+            // access may be expired — try refresh below
+          }
+        }
+        if (savedRefresh) {
+          try {
+            const tokens = await apiClient.post<{
+              accessToken: string
+              refreshToken: string
+              user: UserPayload
+            }>('/auth/refresh', { refreshToken: savedRefresh })
+            const role = String(tokens.user.role || 'USER').toUpperCase() as UserPayload['role']
+            setCredentials({
+              user: { ...tokens.user, role },
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+            })
+            setShowAuth(false)
+            return
+          } catch {
+            storeLogout()
+          }
+        } else {
+          // Dead access token with no refresh — clear and prompt login
+          storeLogout()
+        }
+      }
+
+      if (!isDemoAutoLoginEnabled()) {
+        setShowAuth(true)
+        return
+      }
+
       try {
         const tokens = await apiClient.post<{
           accessToken: string
@@ -168,7 +226,11 @@ export default function TradingPlatform() {
             accessToken: string
             refreshToken: string
             user: UserPayload
-          }>('/auth/register', { fullName: 'Demo User', email: demoEmail, password: demoPassword })
+          }>('/auth/register', {
+            fullName: 'Demo User',
+            email: demoEmail,
+            password: demoPassword,
+          })
 
           setCredentials({
             user: tokens.user as UserPayload,
@@ -177,12 +239,20 @@ export default function TradingPlatform() {
           })
         } catch (error) {
           console.error('Automatic login failed', error)
-          setShowAuth(true) // fall back to manual login/signup
+          setShowAuth(true)
         }
       }
     }
-    ensureAuth()
-  }, [accessToken, authAttempted, demoEmail, demoPassword, setCredentials])
+
+    void boot()
+  }, [
+    _hasHydrated,
+    authAttempted,
+    demoEmail,
+    demoPassword,
+    setCredentials,
+    storeLogout,
+  ])
 
   const { positions: openPositions, refetch: refetchPositions } = useOpenPositions()
 
@@ -221,7 +291,7 @@ export default function TradingPlatform() {
     })
   }, [openPositions, symbols])
 
-  // Keep account status fresh so trading stays locked until admin approval.
+  // Keep account status fresh; silently refresh tokens if access expired
   useEffect(() => {
     if (!accessToken) return
     let cancelled = false
@@ -243,13 +313,34 @@ export default function TradingPlatform() {
           refreshToken: useAuthStore.getState().refreshToken || accessToken,
         })
       } catch {
-        // ignore — user may still browse
+        const savedRefresh = useAuthStore.getState().refreshToken
+        if (!savedRefresh || cancelled) return
+        try {
+          const tokens = await apiClient.post<{
+            accessToken: string
+            refreshToken: string
+            user: UserPayload
+          }>('/auth/refresh', { refreshToken: savedRefresh })
+          if (cancelled) return
+          const role = String(tokens.user.role || 'USER').toUpperCase() as UserPayload['role']
+          setCredentials({
+            user: { ...tokens.user, role },
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+          })
+        } catch {
+          // Session truly gone — only then force login
+          if (!cancelled) {
+            storeLogout()
+            setShowAuth(true)
+          }
+        }
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [accessToken, setCredentials])
+  }, [accessToken, setCredentials, storeLogout])
 
   const canTrade = !!accessToken && user?.status === 'ACTIVE'
 
