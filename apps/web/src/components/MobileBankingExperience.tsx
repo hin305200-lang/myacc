@@ -107,7 +107,7 @@ const SYMBOL_ICONS: Record<string, string> = {
 }
 
 function moneyTone(value: number, auth: boolean) {
-  if (!auth) return 'text-[#9ca3af]'
+  if (!auth) return 'text-[#94a3b8]'
   if (value > 0) return 'text-[#22c55e]'
   if (value < 0) return 'text-[#ef4444]'
   return 'text-white'
@@ -172,18 +172,18 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
   }
 
   return (
-    <div className="mobile-trading-app flex h-[100dvh] flex-col bg-[#12151c] text-white">
+    <div className="mobile-trading-app flex h-[100dvh] flex-col bg-[#070b1a] text-white">
       {/* Top bar — logo · Deposit · menu */}
-      <header className="shrink-0 px-3 pt-[max(0.55rem,env(safe-area-inset-top))]">
+      <header className="shrink-0 border-b border-[#1e293b] bg-[#0a0e27]/95 px-3 pt-[max(0.55rem,env(safe-area-inset-top))] backdrop-blur-md">
         <div className="flex items-center justify-between gap-2 pb-2">
-          <Link href="/landing" className="flex h-9 w-9 items-center justify-center">
-            <span className="text-2xl font-black italic tracking-tighter text-[#7c8cff]">M</span>
+          <Link href="/landing" className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#6366f1] to-[#3b82f6]">
+            <span className="text-sm font-black tracking-tighter text-white">TM</span>
           </Link>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => (auth ? go('wallet') : requireAuth())}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#1f9d57] px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_0_12px_rgba(31,157,87,0.35)]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#10b981] px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_0_12px_rgba(16,185,129,0.35)]"
             >
               <ArrowRight className="h-3.5 w-3.5" />
               Deposit
@@ -214,7 +214,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                 ? 'text-[#f472b6]'
                 : auth
                   ? 'text-white'
-                  : 'text-[#9ca3af]'
+                  : 'text-[#94a3b8]'
             }
           />
           <StatCell
@@ -235,51 +235,51 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
           <StatCell
             label="Margin"
             value={formatMoneyEn(props.account.margin, auth)}
-            className={auth ? 'text-[#22c55e]' : 'text-[#9ca3af]'}
+            className={auth ? 'text-[#22c55e]' : 'text-[#94a3b8]'}
           />
         </div>
       </header>
 
       {/* News / calendar ticker */}
-      <div className="mx-3 mb-2 flex items-center gap-2 overflow-hidden rounded-lg bg-[#1a1e27] px-2.5 py-2">
+      <div className="mx-3 mb-2 flex items-center gap-2 overflow-hidden rounded-lg bg-[#111538] px-2.5 py-2">
         <span className="text-base leading-none">🇯🇵</span>
-        <span className="font-mono text-[11px] text-[#9ca3af]">23:50</span>
+        <span className="font-mono text-[11px] text-[#94a3b8]">23:50</span>
         <span className="min-w-0 flex-1 truncate text-[12px] text-[#e5e7eb]">Foreign Bond Investment</span>
-        <span className="shrink-0 text-[10px] text-[#6b7280]">Impact</span>
+        <span className="shrink-0 text-[10px] text-[#64748b]">Impact</span>
         <span className="flex gap-0.5">
           <span className="h-2 w-2 rounded-[2px] bg-[#22c55e]" />
-          <span className="h-2 w-2 rounded-[2px] bg-[#3f4654]" />
-          <span className="h-2 w-2 rounded-[2px] bg-[#3f4654]" />
+          <span className="h-2 w-2 rounded-[2px] bg-[#2d3142]" />
+          <span className="h-2 w-2 rounded-[2px] bg-[#2d3142]" />
         </span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#6b7280]" />
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#64748b]" />
       </div>
 
       {/* Main sheet */}
-      <main className="relative min-h-0 flex-1 overflow-hidden rounded-t-2xl bg-[#161a22] shadow-[0_-4px_24px_rgba(0,0,0,0.35)]">
+      <main className="relative min-h-0 flex-1 overflow-hidden rounded-t-2xl bg-[#111538] shadow-[0_-4px_24px_rgba(99,102,241,0.12)] ring-1 ring-[#1e293b]">
         <div className="flex justify-center pt-2 pb-1">
-          <div className="h-1 w-10 rounded-full bg-[#3f4654]" />
+          <div className="h-1 w-10 rounded-full bg-[#2d3142]" />
         </div>
 
         {tab === 'trade' && (
           <div className="flex h-[calc(100%-0.75rem)] flex-col">
-            <div className="flex items-center border-b border-[#2a2e38]">
+            <div className="flex items-center border-b border-[#1e293b]">
               <button
                 type="button"
                 onClick={() => setWatchTab('favorites')}
                 className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[13px] font-medium ${
                   watchTab === 'favorites'
                     ? 'text-white border-b-2 border-[#22d3ee]'
-                    : 'text-[#6b7280]'
+                    : 'text-[#64748b]'
                 }`}
               >
-                <Star className={`h-3.5 w-3.5 ${watchTab === 'favorites' ? 'fill-[#38bdf8] text-[#38bdf8]' : ''}`} />
+                <Star className={`h-3.5 w-3.5 ${watchTab === 'favorites' ? 'fill-[#22d3ee] text-[#22d3ee]' : ''}`} />
                 Favorites
               </button>
               <button
                 type="button"
                 onClick={() => setWatchTab('all')}
                 className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[13px] font-medium ${
-                  watchTab === 'all' ? 'text-white border-b-2 border-[#22d3ee]' : 'text-[#6b7280]'
+                  watchTab === 'all' ? 'text-white border-b-2 border-[#22d3ee]' : 'text-[#64748b]'
                 }`}
               >
                 <Search className="h-3.5 w-3.5" />
@@ -287,7 +287,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
               </button>
             </div>
 
-            <div className="grid grid-cols-[1.2fr_1fr_0.9fr] px-3 py-2 text-[11px] text-[#6b7280]">
+            <div className="grid grid-cols-[1.2fr_1fr_0.9fr] px-3 py-2 text-[11px] text-[#64748b]">
               <span>Symbol</span>
               <span className="text-center">Price</span>
               <span className="text-right">Change</span>
@@ -309,10 +309,10 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                       props.onSelectSymbol(s)
                       go('chart')
                     }}
-                    className="grid w-full grid-cols-[1.2fr_1fr_0.9fr] items-center border-b border-[#1f2430] px-3 py-3 text-left active:bg-[#1a1e27]"
+                    className="grid w-full grid-cols-[1.2fr_1fr_0.9fr] items-center border-b border-[#0d1230] px-3 py-3 text-left active:bg-[#111538]"
                   >
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1f2430] text-sm">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0d1230] text-sm">
                         {SYMBOL_ICONS[s.symbol] || props.symbolMeta[s.symbol]?.icon || s.symbol.slice(0, 2)}
                       </span>
                       <div className="min-w-0">
@@ -331,7 +331,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                             />
                           </span>
                         </div>
-                        <p className="text-[11px] text-[#6b7280]">Spread: {Math.max(1, spreadPts)}</p>
+                        <p className="text-[11px] text-[#64748b]">Spread: {Math.max(1, spreadPts)}</p>
                       </div>
                     </div>
 
@@ -346,9 +346,9 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                       >
                         {formatPrice(price)}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-[#6b7280]">
+                      <p className="mt-0.5 text-[10px] text-[#64748b]">
                         <span className="text-[#22c55e]">L</span>{' '}
-                        <span className="font-mono text-[#9ca3af]">{formatPrice(low)}</span>
+                        <span className="font-mono text-[#94a3b8]">{formatPrice(low)}</span>
                       </p>
                     </div>
 
@@ -362,9 +362,9 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                         {up ? '' : '-'}
                         {Math.abs(Number(s.changePercent || 0)).toFixed(2)}%
                       </p>
-                      <p className="mt-0.5 text-[10px] text-[#6b7280]">
+                      <p className="mt-0.5 text-[10px] text-[#64748b]">
                         <span className="text-[#ef4444]">H</span>{' '}
-                        <span className="font-mono text-[#9ca3af]">{formatPrice(high)}</span>
+                        <span className="font-mono text-[#94a3b8]">{formatPrice(high)}</span>
                       </p>
                     </div>
                   </button>
@@ -425,7 +425,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
         {tab === 'wallet' && (
           <div className="h-full overflow-y-auto px-2 pb-24 pt-2">
             {auth ? (
-              <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#12151c]">
+              <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#0a0e27]">
                 <WalletPage appearance="terminal" />
               </div>
             ) : (
@@ -456,7 +456,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
         )}
         {tab === 'profile' && (
           <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
-            <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#12151c]">
+            <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#0a0e27]">
               <ProfilePage appearance="terminal" compact />
             </div>
           </div>
@@ -464,7 +464,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
       </main>
 
       {/* Bottom nav — Trade · Positions · History · Account */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#2a2e38] bg-[#12151c]/95 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-md">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1e293b] bg-[#0a0e27]/95 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-stretch justify-around px-2">
           <NavItem
             active={tab === 'trade' || tab === 'chart'}
@@ -497,11 +497,11 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-[60] bg-black/60" onClick={() => setMenuOpen(false)} />
-          <aside className="fixed right-0 top-0 z-[70] flex h-full w-[78%] max-w-xs flex-col bg-[#161a22] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#2a2e38] px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
+          <aside className="fixed right-0 top-0 z-[70] flex h-full w-[78%] max-w-xs flex-col bg-[#111538] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1e293b] px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
               <span className="text-sm font-semibold">Menu</span>
               <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close">
-                <X className="h-5 w-5 text-[#9ca3af]" />
+                <X className="h-5 w-5 text-[#94a3b8]" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto py-2">
@@ -519,14 +519,14 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                   key={item.id}
                   type="button"
                   onClick={() => go(item.id)}
-                  className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm text-white active:bg-[#1f2430]"
+                  className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm text-white active:bg-[#0d1230]"
                 >
                   {item.label}
-                  <ChevronRight className="h-4 w-4 text-[#6b7280]" />
+                  <ChevronRight className="h-4 w-4 text-[#64748b]" />
                 </button>
               ))}
             </div>
-            <div className="border-t border-[#2a2e38] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="border-t border-[#1e293b] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {auth ? (
                 <button
                   type="button"
@@ -546,7 +546,7 @@ export default function MobileBankingExperience(props: MobileBankingExperiencePr
                     setMenuOpen(false)
                     requireAuth()
                   }}
-                  className="w-full rounded-lg bg-[#1f9d57] py-3 text-sm font-semibold text-white"
+                  className="w-full rounded-lg bg-[#10b981] py-3 text-sm font-semibold text-white"
                 >
                   Sign in
                 </button>
@@ -578,7 +578,7 @@ function StatCell({
 }) {
   return (
     <div>
-      <p className="text-[11px] text-[#6b7280]">{label}</p>
+      <p className="text-[11px] text-[#64748b]">{label}</p>
       <p className={`mt-0.5 font-mono text-[17px] font-semibold leading-tight ${className || 'text-white'}`}>
         {value}
       </p>
@@ -602,7 +602,7 @@ function NavItem({
       type="button"
       onClick={onClick}
       className={`flex min-w-[4.25rem] flex-col items-center gap-0.5 px-2 py-1.5 ${
-        active ? 'text-[#38bdf8]' : 'text-[#6b7280]'
+        active ? 'text-[#22d3ee]' : 'text-[#64748b]'
       }`}
     >
       <Icon className={`h-5 w-5 ${active ? 'stroke-[2.4]' : ''}`} />
@@ -627,8 +627,8 @@ function PositionsSheet({
   if (!auth) {
     return (
       <div className="px-4 py-10 text-center">
-        <p className="text-sm text-[#9ca3af]">Sign in to view open positions.</p>
-        <button type="button" onClick={onLogin} className="mt-4 rounded-lg bg-[#1f9d57] px-4 py-2 text-sm font-semibold">
+        <p className="text-sm text-[#94a3b8]">Sign in to view open positions.</p>
+        <button type="button" onClick={onLogin} className="mt-4 rounded-lg bg-[#10b981] px-4 py-2 text-sm font-semibold">
           Sign in
         </button>
       </div>
@@ -637,8 +637,8 @@ function PositionsSheet({
   if (positions.length === 0) {
     return (
       <div className="px-4 py-10 text-center">
-        <p className="text-sm text-[#9ca3af]">No open positions</p>
-        <button type="button" onClick={onTrade} className="mt-4 text-sm font-semibold text-[#38bdf8]">
+        <p className="text-sm text-[#94a3b8]">No open positions</p>
+        <button type="button" onClick={onTrade} className="mt-4 text-sm font-semibold text-[#22d3ee]">
           Open a trade
         </button>
       </div>
@@ -648,14 +648,14 @@ function PositionsSheet({
     <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
       <ul className="space-y-2">
         {positions.map((p) => (
-          <li key={p.id} className="rounded-xl border border-[#2a2e38] bg-[#1a1e27] p-3">
+          <li key={p.id} className="rounded-xl border border-[#1e293b] bg-[#111538] p-3">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-white">
                   {p.symbol}{' '}
                   <span className={p.side === 'BUY' ? 'text-[#22c55e]' : 'text-[#ef4444]'}>{p.side}</span>
                 </p>
-                <p className="mt-1 font-mono text-[11px] text-[#6b7280]">
+                <p className="mt-1 font-mono text-[11px] text-[#64748b]">
                   {Number(p.volume).toFixed(2)} lot · {p.openPrice} → {Number(p.currentPrice).toFixed?.(5) ?? p.currentPrice}
                 </p>
               </div>
@@ -690,14 +690,14 @@ function HistorySheet({
 }) {
   return (
     <div className="px-4 py-10 text-center">
-      <History className="mx-auto h-8 w-8 text-[#6b7280]" />
-      <p className="mt-3 text-sm text-[#9ca3af]">
+      <History className="mx-auto h-8 w-8 text-[#64748b]" />
+      <p className="mt-3 text-sm text-[#94a3b8]">
         {auth ? 'Closed trades and ledger entries appear in Funds.' : 'Sign in to view trading history.'}
       </p>
       <button
         type="button"
         onClick={auth ? onWallet : onLogin}
-        className="mt-4 rounded-lg bg-[#1f9d57] px-4 py-2 text-sm font-semibold text-white"
+        className="mt-4 rounded-lg bg-[#10b981] px-4 py-2 text-sm font-semibold text-white"
       >
         {auth ? 'Open Funds' : 'Sign in'}
       </button>
@@ -707,17 +707,17 @@ function HistorySheet({
 
 function GuestGate({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
   return (
-    <section className="rounded-xl border border-[#2a2e38] bg-[#1a1e27] p-6 text-center">
+    <section className="rounded-xl border border-[#1e293b] bg-[#111538] p-6 text-center">
       <h2 className="text-lg font-bold text-white">Funds & wallet</h2>
-      <p className="mt-2 text-sm text-[#9ca3af]">Sign in to deposit, withdraw, and view balances.</p>
+      <p className="mt-2 text-sm text-[#94a3b8]">Sign in to deposit, withdraw, and view balances.</p>
       <div className="mt-5 grid grid-cols-2 gap-2">
-        <button type="button" onClick={onLogin} className="rounded-lg bg-[#1f9d57] py-3 text-sm font-bold text-white">
+        <button type="button" onClick={onLogin} className="rounded-lg bg-[#10b981] py-3 text-sm font-bold text-white">
           Sign in
         </button>
         <button
           type="button"
           onClick={onRegister}
-          className="rounded-lg border border-[#2a2e38] bg-[#12151c] py-3 text-sm font-bold text-white"
+          className="rounded-lg border border-[#1e293b] bg-[#0a0e27] py-3 text-sm font-bold text-white"
         >
           Register
         </button>
@@ -739,10 +739,10 @@ function ProfileTradingMenu({
 }) {
   return (
     <div className="space-y-3 pb-4">
-      <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#1a1e27]">
+      <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#111538]">
         <ProfilePage appearance="terminal" compact />
       </div>
-      <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#1a1e27]">
+      <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#111538]">
         <MenuRow label="Deposit / Wallet" onClick={() => onNavigate('wallet')} />
         <MenuRow label="Settings" onClick={() => onNavigate('settings')} />
         <MenuRow label="Notifications" onClick={() => onNavigate('notifications')} />
@@ -760,7 +760,7 @@ function ProfileTradingMenu({
         </button>
       ) : (
         onLogin && (
-          <button type="button" onClick={onLogin} className="w-full rounded-xl bg-[#1f9d57] py-3 text-sm font-bold text-white">
+          <button type="button" onClick={onLogin} className="w-full rounded-xl bg-[#10b981] py-3 text-sm font-bold text-white">
             Sign in
           </button>
         )
@@ -772,8 +772,8 @@ function ProfileTradingMenu({
 function SubpageShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="h-full overflow-y-auto px-3 pb-24 pt-2">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#9ca3af]">{title}</h2>
-      <div className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#1a1e27]">{children}</div>
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#94a3b8]">{title}</h2>
+      <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-[#111538]">{children}</div>
     </div>
   )
 }
@@ -783,10 +783,10 @@ function MenuRow({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between border-b border-[#2a2e38] px-4 py-3.5 text-left text-sm font-medium text-white last:border-0 active:bg-[#12151c]"
+      className="flex w-full items-center justify-between border-b border-[#1e293b] px-4 py-3.5 text-left text-sm font-medium text-white last:border-0 active:bg-[#0a0e27]"
     >
       {label}
-      <ChevronRight className="h-4 w-4 text-[#6b7280]" />
+      <ChevronRight className="h-4 w-4 text-[#64748b]" />
     </button>
   )
 }

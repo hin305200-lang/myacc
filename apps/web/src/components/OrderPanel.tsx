@@ -53,7 +53,7 @@ export default function OrderPanel({
       <div className="h-full flex items-center justify-center text-[#8e92a3] text-sm bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219] min-w-0">
         <div className="text-center space-y-2">
           <div className="inline-block p-3 rounded-full bg-[#252836]/50 border border-[#2d3142]">
-            <Shield className="h-6 w-6 text-[#6b7280]" />
+            <Shield className="h-6 w-6 text-[#64748b]" />
           </div>
           <p className="text-xs text-[#8e92a3]">Select a symbol to trade</p>
         </div>
@@ -82,9 +82,13 @@ export default function OrderPanel({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#15181d] relative overflow-hidden">
+    <div className="h-full flex flex-col bg-gradient-to-br from-[#1a1d2e] via-[#151824] to-[#0f1219] relative overflow-hidden">
+      <div className="absolute inset-0 opacity-20 pointer-events-none">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#4f46e5] rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#22d3ee] rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+      </div>
       {/* Symbol Info */}
-      <div className="px-3 py-2.5 border-b border-[#2a2e35] relative z-10">
+      <div className="px-3 py-2.5 border-b border-[#2d3142]/50 bg-[#252836]/40 backdrop-blur-sm relative z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-white">{symbol.symbol}</span>
@@ -105,22 +109,22 @@ export default function OrderPanel({
         </div>
       </div>
 
-      <div className="px-3 py-3 border-b border-[#2a2e35] space-y-2.5 relative z-10">
+      <div className="px-3 py-3 border-b border-[#2d3142]/50 space-y-2.5 relative z-10">
         <button
           onClick={() => handleTrade('SELL')}
           disabled={buttonsDisabled}
-          className={`w-full py-4 rounded relative overflow-hidden transition ${
-            buttonsDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'
-          } bg-[#2a1515] border border-[#ef4444]/50 ${tradeSuccess === 'SELL' ? 'ring-1 ring-[#ef4444]' : ''}`}
+          className={`w-full py-4 rounded-xl relative overflow-hidden transition transform ${
+            buttonsDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] hover:shadow-xl hover:shadow-[#ef4444]/30'
+          } bg-gradient-to-br from-[#2a1b1b] via-[#1f1414] to-[#1a0f0f] border-2 border-[#ef4444]/50 ${tradeSuccess === 'SELL' ? 'ring-1 ring-[#ef4444]' : ''}`}
         >
           <div className="text-[10px] text-[#ef4444] mb-0.5 font-semibold tracking-wider uppercase">SELL</div>
           <div className="text-xl font-bold text-white font-mono">{formatPrice(symbol.bid)}</div>
         </button>
 
-        <div className="flex items-center gap-2 rounded border border-[#2a2e35] bg-[#1a1d21] p-1.5">
+        <div className="flex items-center gap-2 rounded-lg border border-[#2d3142]/50 bg-[#252836]/50 p-1.5 backdrop-blur-sm">
           <button
             onClick={() => onLotSizeChange(Math.max(0.01, lotSize - 0.01))}
-            className="px-3 py-1.5 rounded bg-[#22262c] border border-[#2a2e35] text-white hover:bg-[#2a2e35]"
+            className="px-3 py-1.5 rounded-lg bg-[#252836] border border-[#2d3142] text-white hover:border-[#6366f1]"
           >
             −
           </button>
@@ -128,13 +132,13 @@ export default function OrderPanel({
             type="number"
             value={lotSize}
             onChange={(e) => onLotSizeChange(parseFloat(e.target.value) || 0.01)}
-            className="flex-1 px-2 py-1.5 bg-transparent text-white text-center font-mono focus:outline-none"
+            className="flex-1 px-2 py-1.5 bg-transparent text-white text-center font-mono focus:outline-none focus:border-[#6366f1]"
             step="0.01"
             min="0.01"
           />
           <button
             onClick={() => onLotSizeChange(lotSize + 0.01)}
-            className="px-3 py-1.5 rounded bg-[#22262c] border border-[#2a2e35] text-white hover:bg-[#2a2e35]"
+            className="px-3 py-1.5 rounded-lg bg-[#252836] border border-[#2d3142] text-white hover:border-[#6366f1]"
           >
             +
           </button>
@@ -143,11 +147,11 @@ export default function OrderPanel({
         <button
           onClick={() => handleTrade('BUY')}
           disabled={buttonsDisabled}
-          className={`w-full py-4 rounded relative overflow-hidden transition ${
-            buttonsDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'
-          } bg-[#152a1b] border border-[#22c55e]/50 ${tradeSuccess === 'BUY' ? 'ring-1 ring-[#22c55e]' : ''}`}
+          className={`w-full py-4 rounded-xl relative overflow-hidden transition transform ${
+            buttonsDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] hover:shadow-xl hover:shadow-[#10b981]/30'
+          } bg-gradient-to-br from-[#1b2a1f] via-[#152018] to-[#0f1812] border-2 border-[#10b981]/50 ${tradeSuccess === 'BUY' ? 'ring-1 ring-[#10b981]' : ''}`}
         >
-          <div className="text-[10px] text-[#22c55e] mb-0.5 font-semibold tracking-wider uppercase">BUY</div>
+          <div className="text-[10px] text-[#10b981] mb-0.5 font-semibold tracking-wider uppercase">BUY</div>
           <div className="text-xl font-bold text-white font-mono">{formatPrice(symbol.ask)}</div>
         </button>
       </div>
@@ -155,34 +159,34 @@ export default function OrderPanel({
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 relative z-10">
         <div className="space-y-2">
           <div className="flex items-center gap-2 mb-1">
-            <Shield className="h-3.5 w-3.5 text-[#9ca3af]" />
+            <Shield className="h-3.5 w-3.5 text-[#94a3b8]" />
             <div className="text-[11px] font-semibold text-white">Risk Management</div>
           </div>
           <div className="space-y-2">
             <div>
-              <label className="text-[10px] text-[#6b7280] block mb-1 uppercase tracking-wider">Stop Loss</label>
+              <label className="text-[10px] text-[#64748b] block mb-1 uppercase tracking-wider">Stop Loss</label>
               <input
                 type="number"
                 value={stopLoss}
                 onChange={(e) => setStopLoss(e.target.value)}
                 placeholder="Optional"
-                className="w-full px-3 py-2 bg-[#1a1d21] border border-[#2a2e35] rounded text-xs text-white font-mono focus:outline-none focus:border-[#4b9fff]"
+                className="w-full px-3 py-2 bg-[#252836] border border-[#1e293b] rounded text-xs text-white font-mono focus:outline-none focus:border-[#6366f1]"
               />
             </div>
             <div>
-              <label className="text-[10px] text-[#6b7280] block mb-1 uppercase tracking-wider">Take Profit</label>
+              <label className="text-[10px] text-[#64748b] block mb-1 uppercase tracking-wider">Take Profit</label>
               <input
                 type="number"
                 value={takeProfit}
                 onChange={(e) => setTakeProfit(e.target.value)}
                 placeholder="Optional"
-                className="w-full px-3 py-2 bg-[#1a1d21] border border-[#2a2e35] rounded text-xs text-white font-mono focus:outline-none focus:border-[#4b9fff]"
+                className="w-full px-3 py-2 bg-[#252836] border border-[#1e293b] rounded text-xs text-white font-mono focus:outline-none focus:border-[#6366f1]"
               />
             </div>
           </div>
         </div>
 
-        <div className="text-[11px] text-[#9ca3af] space-y-1.5 pt-2 border-t border-[#2a2e35]">
+        <div className="text-[11px] text-[#94a3b8] space-y-1.5 pt-2 border-t border-[#1e293b]">
           <div className="flex justify-between items-center py-1">
             <span>Asset class:</span>
             <span className="text-white font-semibold">Forex FX Exotic</span>

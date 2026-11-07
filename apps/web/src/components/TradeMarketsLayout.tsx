@@ -83,12 +83,12 @@ export default function TradeMarketsLayout({
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#12151a] text-white overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#0a0e27] text-white overflow-hidden">
       {/* ModMount-style top account bar */}
-      <header className="h-12 flex-shrink-0 bg-[#1a1d21] border-b border-[#2a2e35] flex items-center justify-between px-3 gap-4">
+      <header className="h-12 flex-shrink-0 bg-[#252836] border-b border-[#1e293b] flex items-center justify-between px-3 gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/landing" className="flex items-center gap-2 hover:opacity-90 shrink-0">
-            <div className="h-7 w-7 rounded bg-[#2b3038] flex items-center justify-center border border-[#3a404a]">
+            <div className="h-7 w-7 rounded bg-gradient-to-br from-[#6366f1] to-[#3b82f6] flex items-center justify-center shadow-lg shadow-[#6366f1]/30">
               <span className="text-[10px] font-black tracking-tight">TM</span>
             </div>
             <span className="text-sm font-semibold tracking-wide hidden xl:inline">TradeMarkets</span>
@@ -96,11 +96,11 @@ export default function TradeMarketsLayout({
 
           <button
             type="button"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#2a2e35] bg-[#15181d] text-[11px] text-[#c8cdd5] hover:border-[#3a404a] max-w-[220px]"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#1e293b] bg-[#111538] text-[11px] text-[#94a3b8] hover:border-[#2d3142] max-w-[220px]"
             title={accountLabel}
           >
             <span className="truncate font-medium">{accountLabel}</span>
-            <ChevronDown className="h-3.5 w-3.5 text-[#6b7280] shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#64748b] shrink-0" />
           </button>
         </div>
 
@@ -120,11 +120,11 @@ export default function TradeMarketsLayout({
             }
           />
           <div className="flex flex-col leading-tight shrink-0">
-            <span className="text-[10px] text-[#6b7280] uppercase tracking-wide">Profit</span>
+            <span className="text-[10px] text-[#64748b] uppercase tracking-wide">Profit</span>
             <span
               className={`font-semibold font-mono text-[13px] ${
                 !userId
-                  ? 'text-[#6b7280]'
+                  ? 'text-[#64748b]'
                   : account.profit >= 0
                     ? 'text-[#22c55e]'
                     : 'text-[#ef4444]'
@@ -153,7 +153,7 @@ export default function TradeMarketsLayout({
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="h-8 w-8 rounded-full bg-[#15181d] border border-[#2a2e35] flex items-center justify-center text-[#9ca3af] hover:text-white hover:border-[#3a404a]"
+              className="h-8 w-8 rounded-full bg-[#111538] border border-[#1e293b] flex items-center justify-center text-[#94a3b8] hover:text-white hover:border-[#2d3142]"
               aria-label="Profile menu"
             >
               <User className="h-4 w-4" />
@@ -163,7 +163,7 @@ export default function TradeMarketsLayout({
               <button
                 type="button"
                 onClick={onLogin}
-                className="px-3 py-1.5 text-[11px] font-semibold bg-[#2b3038] border border-[#3a404a] rounded hover:bg-[#343a44]"
+                className="px-3 py-1.5 text-[11px] font-semibold bg-[#6366f1] text-white rounded hover:bg-[#4f46e5]"
               >
                 Login / Sign Up
               </button>
@@ -173,7 +173,7 @@ export default function TradeMarketsLayout({
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-10 z-50 w-52 rounded-md border border-[#2a2e35] bg-[#1a1d21] shadow-xl py-1">
+              <div className="absolute right-0 top-10 z-50 w-52 rounded-md border border-[#1e293b] bg-[#252836] shadow-xl py-1">
                 {navItems.map((item) => {
                   const Icon = item.icon
                   const active = activePage === item.id
@@ -183,7 +183,7 @@ export default function TradeMarketsLayout({
                       type="button"
                       onClick={() => handleNavClick(item.id)}
                       className={`w-full px-3 py-2 flex items-center gap-2 text-left text-xs ${
-                        active ? 'bg-[#252830] text-white' : 'text-[#c8cdd5] hover:bg-[#22262c]'
+                        active ? 'bg-[#252830] text-white' : 'text-[#94a3b8] hover:bg-[#1e293b]'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
@@ -198,7 +198,7 @@ export default function TradeMarketsLayout({
                       setMenuOpen(false)
                       onLogout()
                     }}
-                    className="w-full px-3 py-2 flex items-center gap-2 text-left text-xs text-[#ef4444] hover:bg-[#22262c] border-t border-[#2a2e35] mt-1"
+                    className="w-full px-3 py-2 flex items-center gap-2 text-left text-xs text-[#ef4444] hover:bg-[#1e293b] border-t border-[#1e293b] mt-1"
                   >
                     <LogOut className="h-3.5 w-3.5" />
                     Logout
@@ -218,10 +218,10 @@ export default function TradeMarketsLayout({
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="flex flex-col leading-tight shrink-0">
-      <span className="text-[10px] text-[#6b7280] uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] text-[#64748b] uppercase tracking-wide">{label}</span>
       <span className="font-semibold font-mono text-[13px] text-white">
         {value}
-        {sub ? <span className="ml-1 text-[10px] font-normal text-[#6b7280]">{sub}</span> : null}
+        {sub ? <span className="ml-1 text-[10px] font-normal text-[#64748b]">{sub}</span> : null}
       </span>
     </div>
   )

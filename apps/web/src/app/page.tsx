@@ -395,7 +395,7 @@ export default function TradingPlatform() {
         return (
           <>
             {/* Desktop ModMount layout: Watch LEFT · Chart CENTER · Order RIGHT · Positions BOTTOM */}
-            <div className="hidden lg:flex flex-1 overflow-hidden bg-[#12151a] min-h-0">
+            <div className="hidden lg:flex flex-1 overflow-hidden bg-[#0a0e27] min-h-0">
               {/* Left — Market Watch (full height) */}
               <div className="w-[270px] xl:w-[300px] flex-shrink-0 h-full">
                 <MarketWatch
@@ -410,23 +410,23 @@ export default function TradingPlatform() {
               <div className="flex-1 flex flex-col min-w-0 min-h-0">
                 <div className="flex flex-1 min-h-0 overflow-hidden">
                   {/* Center chart */}
-                  <div className="flex-1 flex flex-col min-w-0 bg-[#0f1216]">
-                    <div className="h-9 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[#2a2e35] bg-[#15181d]">
+                  <div className="flex-1 flex flex-col min-w-0 bg-[#1a1d2e]">
+                    <div className="h-9 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[#2d3142] bg-[#252836]">
                       <span className="text-sm font-semibold tracking-wide text-white">
                         {selectedSymbol.symbol}
                       </span>
-                      <span className="text-[11px] font-mono text-[#9ca3af]">
+                      <span className="text-[11px] font-mono text-[#94a3b8]">
                         {selectedSymbol.bid.toFixed(selectedSymbol.bid > 100 ? 2 : 5)}
                       </span>
                       <span
                         className={`text-[11px] font-mono font-semibold ${
-                          selectedSymbol.changePercent >= 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'
+                          selectedSymbol.changePercent >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'
                         }`}
                       >
                         {selectedSymbol.changePercent >= 0 ? '+' : ''}
                         {selectedSymbol.changePercent.toFixed(2)}%
                       </span>
-                      <span className="ml-auto text-[10px] uppercase tracking-wide text-[#6b7280]">
+                      <span className="ml-auto text-[10px] uppercase tracking-wide text-[#8e92a3]">
                         {selectedSymbol.marketStatus === 'open' ? 'Market open' : 'Market closed'}
                       </span>
                     </div>
@@ -436,7 +436,7 @@ export default function TradingPlatform() {
                   </div>
 
                   {/* Right — order ticket (kept, placed like a dealing panel) */}
-                  <div className="w-[280px] xl:w-[300px] flex-shrink-0 border-l border-[#2a2e35] bg-[#15181d]">
+                  <div className="w-[280px] xl:w-[300px] flex-shrink-0 border-l border-[#2d3142] bg-[#1a1d2e]">
                     <OrderPanel
                       symbol={selectedSymbol ?? null}
                       lotSize={lotSize}

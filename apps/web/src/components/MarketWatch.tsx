@@ -101,19 +101,19 @@ export default function MarketWatch({
 
   return (
     <div
-      className={`h-full flex flex-col bg-[#15181d] min-w-0 ${
-        embedded ? 'rounded-2xl border border-[#2a2e35] overflow-hidden' : 'border-r border-[#2a2e35]'
+      className={`h-full flex flex-col bg-gradient-to-b from-[#1a1d2e] to-[#151824] min-w-0 ${
+        embedded ? 'rounded-2xl border border-[#2d3142] overflow-hidden' : 'border-r border-[#2d3142]'
       }`}
     >
       {/* Favorites / All Symbols */}
-      <div className="flex items-center border-b border-[#2a2e35]">
+      <div className="flex items-center border-b border-[#1e293b]">
         <button
           type="button"
           onClick={() => setTab('favorites')}
           className={`flex-1 py-2.5 text-[11px] font-semibold tracking-wide ${
             tab === 'favorites'
-              ? 'text-white border-b-2 border-[#4b9fff]'
-              : 'text-[#6b7280] hover:text-[#c8cdd5]'
+              ? 'text-white border-b-2 border-[#6366f1]'
+              : 'text-[#64748b] hover:text-[#94a3b8]'
           }`}
         >
           FAVORITES
@@ -123,33 +123,33 @@ export default function MarketWatch({
           onClick={() => setTab('all')}
           className={`flex-1 py-2.5 text-[11px] font-semibold tracking-wide ${
             tab === 'all'
-              ? 'text-white border-b-2 border-[#4b9fff]'
-              : 'text-[#6b7280] hover:text-[#c8cdd5]'
+              ? 'text-white border-b-2 border-[#6366f1]'
+              : 'text-[#64748b] hover:text-[#94a3b8]'
           }`}
         >
           ALL SYMBOLS
         </button>
       </div>
 
-      <div className="px-2.5 py-2 border-b border-[#2a2e35]">
-        <div className="flex items-center gap-2 rounded bg-[#1a1d21] border border-[#2a2e35] px-2 py-1.5">
-          <Search className="h-3.5 w-3.5 text-[#6b7280]" />
+      <div className="px-2.5 py-2 border-b border-[#1e293b]">
+        <div className="flex items-center gap-2 rounded bg-[#252836] border border-[#1e293b] px-2 py-1.5">
+          <Search className="h-3.5 w-3.5 text-[#64748b]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search for assets to trade..."
-            className="flex-1 bg-transparent text-[11px] text-white placeholder-[#6b7280] focus:outline-none"
+            className="flex-1 bg-transparent text-[11px] text-white placeholder-[#64748b] focus:outline-none"
           />
         </div>
         <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-[9px] text-[#6b7280] uppercase tracking-wide">
+          <span className="text-[9px] text-[#64748b] uppercase tracking-wide">
             {dataSource === 'live' ? 'Live feed' : dataSource === 'unavailable' ? 'Feed down' : 'Delayed / closed'}
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-1 px-2 py-1.5 text-[9px] uppercase tracking-wide text-[#6b7280] border-b border-[#2a2e35]">
+      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-1 px-2 py-1.5 text-[9px] uppercase tracking-wide text-[#64748b] border-b border-[#1e293b]">
         <span>Symbol</span>
         <span className="w-16 text-right">Price</span>
         <span className="w-12 text-right">Spread</span>
@@ -158,7 +158,7 @@ export default function MarketWatch({
 
       <div className="flex-1 overflow-y-auto">
         {tab === 'favorites' && filtered.length === 0 ? (
-          <div className="px-3 py-8 text-center text-[11px] text-[#6b7280]">
+          <div className="px-3 py-8 text-center text-[11px] text-[#64748b]">
             Star symbols to add favorites
           </div>
         ) : (
@@ -171,15 +171,15 @@ export default function MarketWatch({
             if (rows.length === 0 && searchQuery) return null
             const open = openGroups[group.id] !== false
             return (
-              <div key={group.id} className="border-b border-[#1f2329]">
+              <div key={group.id} className="border-b border-[#1e293b]">
                 <button
                   type="button"
                   onClick={() => setOpenGroups((g) => ({ ...g, [group.id]: !open }))}
-                  className="w-full flex items-center gap-1 px-2 py-1.5 text-[10px] font-semibold tracking-wide text-[#9ca3af] hover:bg-[#1a1d21]"
+                  className="w-full flex items-center gap-1 px-2 py-1.5 text-[10px] font-semibold tracking-wide text-[#94a3b8] hover:bg-[#252836]"
                 >
                   {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   {group.label}
-                  <span className="ml-auto text-[#6b7280]">{rows.length}</span>
+                  <span className="ml-auto text-[#64748b]">{rows.length}</span>
                 </button>
                 {open &&
                   rows.map((symbol) => (
@@ -239,8 +239,8 @@ function SymbolRow({
     <button
       type="button"
       onClick={() => onSelect(symbol)}
-      className={`w-full grid grid-cols-[1fr_auto_auto_auto] gap-1 items-center px-2 py-1.5 text-left border-b border-[#1f2329]/80 ${
-        selected ? 'bg-[#1e3a5f]/50' : 'hover:bg-[#1a1d21]'
+      className={`w-full grid grid-cols-[1fr_auto_auto_auto] gap-1 items-center px-2 py-1.5 text-left border-b border-[#1e293b]/80 ${
+        selected ? 'bg-[#6366f1]/15 border-l-2 border-l-[#6366f1]' : 'hover:bg-[#252836]/60'
       }`}
     >
       <div className="flex items-center gap-1.5 min-w-0">
@@ -258,7 +258,7 @@ function SymbolRow({
         <span className="text-[11px] font-semibold text-white truncate">{symbol.symbol}</span>
       </div>
       <span className="w-16 text-right font-mono text-[11px] text-[#e5e7eb]">{formatPrice(symbol.bid)}</span>
-      <span className="w-12 text-right font-mono text-[10px] text-[#9ca3af]">{formatSpread(symbol)}</span>
+      <span className="w-12 text-right font-mono text-[10px] text-[#94a3b8]">{formatSpread(symbol)}</span>
       <span
         className={`w-14 text-right font-mono text-[10px] font-semibold ${
           up ? 'text-[#22c55e]' : 'text-[#ef4444]'
