@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+// Colocate with Supabase (ap-northeast-1) so open/close stay under ~1s
+export const preferredRegion = ['hnd1']
+export const maxDuration = 15
 
 function resolveApiTarget(): string | null {
   const raw = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL

@@ -179,26 +179,25 @@ async function settleClose(
   // "Unable to start a transaction in the given time".
   const realized = roundMoney(profit)
 
-  const closed = await prisma.position.updateMany({
-    where: { id: position.id, userId, status: 'OPEN' },
-    data: {
-      status: 'CLOSED',
-      closePrice,
-      currentPrice: closePrice,
-      profit: realized,
-      closedAt: new Date(),
-    },
-  })
-  if (closed.count === 0) throw new Error('Order not found')
-
-  // One parallel read after close — no second applyAccountTotals round-trip
-  const [user, remaining] = await Promise.all([
+  // Close + read user/remaining in one wave, then one write wave (min round-trips)
+  const [closed, user, remaining] = await Promise.all([
+    prisma.position.updateMany({
+      where: { id: position.id, userId, status: 'OPEN' },
+      data: {
+        status: 'CLOSED',
+        closePrice,
+        currentPrice: closePrice,
+        profit: realized,
+        closedAt: new Date(),
+      },
+    }),
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.position.findMany({
-      where: { userId, status: 'OPEN' },
+      where: { userId, status: 'OPEN', NOT: { id: position.id } },
       select: { marginUsed: true, profit: true },
     }),
   ])
+  if (closed.count === 0) throw new Error('Order not found')
   if (!user) return null
 
   const balanceBefore = Number(user.balance)
@@ -212,7 +211,19 @@ async function settleClose(
     positions: remaining,
   })
 
-  await Promise.all([
+  // Batch writes (non-interactive) — works with PgBouncer/Supabase pooler
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: {
+        balance: newBalance,
+        equity: metrics.equity,
+        margin: metrics.margin,
+        freeMargin: metrics.freeMargin,
+        marginLevel: metrics.marginLevel ?? 0,
+        leverage,
+      },
+    }),
     prisma.closedTrade.create({
       data: {
         userId,
@@ -235,17 +246,6 @@ async function settleClose(
         balanceBefore,
         balanceAfter: newBalance,
         note: reason,
-      },
-    }),
-    prisma.user.update({
-      where: { id: userId },
-      data: {
-        balance: newBalance,
-        equity: metrics.equity,
-        margin: metrics.margin,
-        freeMargin: metrics.freeMargin,
-        marginLevel: metrics.marginLevel ?? 0,
-        leverage,
       },
     }),
   ])

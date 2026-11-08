@@ -4,8 +4,9 @@
   "installCommand": "npm install --no-workspaces --dangerously-allow-all-scripts",
   "buildCommand": "npx prisma generate && next build --no-lint",
   "outputDirectory": ".next",
+  "regions": ["hnd1"],
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "fast-trade-fix-build-20261108d"
+    "REDEPLOY_STAMP": "tokyo-region-fast-trade-20261108e"
   }
 }
