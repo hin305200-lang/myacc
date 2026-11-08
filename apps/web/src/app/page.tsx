@@ -80,21 +80,6 @@ export default function TradingPlatform() {
   }
   const [activePage, setActivePage] = useState('chart')
   const accountSummary = useAccountSummary()
-  const account =
-    accessToken && accountSummary
-      ? {
-          balance: Number(accountSummary.balance),
-          credit: Number(accountSummary.credit ?? 0),
-          equity: Number(accountSummary.equity),
-          freeMargin: Number(accountSummary.freeMargin),
-          margin: Number(accountSummary.margin),
-          marginLevel: accountSummary.marginLevel,
-          profit: Number(accountSummary.profit ?? 0),
-          floatingProfit: Number(accountSummary.floatingProfit ?? 0),
-          floatingLoss: Number(accountSummary.floatingLoss ?? 0),
-          marginAlert: accountSummary.marginAlert ?? { level: 'ok' as const },
-        }
-      : { ...EMPTY_TRADING_ACCOUNT, marginAlert: { level: 'ok' as const } }
   const [lotSize, setLotSize] = useState(0.01)
   const [isMobileTradeOpen, setIsMobileTradeOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'chart' | 'positions'>('chart')
@@ -272,7 +257,7 @@ export default function TradingPlatform() {
 
   const { positions: openPositions, refetch: refetchPositions } = useOpenPositions()
 
-  // Display positions with live BID/ASK overlay; backend remains source of truth on poll
+  // Display positions with live BID/ASK overlay; same tick feed drives header Profit
   const positions = useMemo(() => {
     return openPositions.map((order) => {
       const marketPrice = symbols.find((s) => s.symbol === order.symbol)
@@ -306,6 +291,40 @@ export default function TradingPlatform() {
       }
     })
   }, [openPositions, symbols])
+
+  // Header Profit / equity / free margin tick in lockstep with open-trade Net profit
+  const account = useMemo(() => {
+    if (!accessToken || !accountSummary) {
+      return { ...EMPTY_TRADING_ACCOUNT, marginAlert: { level: 'ok' as const } }
+    }
+    const balance = Number(accountSummary.balance)
+    const credit = Number(accountSummary.credit ?? 0)
+    const margin = Number(accountSummary.margin)
+    const liveProfit = positions.reduce((sum, p) => sum + Number(p.profit || 0), 0)
+    const floatingProfit = positions.reduce(
+      (sum, p) => sum + (Number(p.profit) > 0 ? Number(p.profit) : 0),
+      0
+    )
+    const floatingLoss = positions.reduce(
+      (sum, p) => sum + (Number(p.profit) < 0 ? Number(p.profit) : 0),
+      0
+    )
+    const equity = balance + credit + liveProfit
+    const freeMargin = equity - margin
+    const marginLevel = margin > 0 ? (equity / margin) * 100 : null
+    return {
+      balance,
+      credit,
+      equity,
+      freeMargin,
+      margin,
+      marginLevel,
+      profit: liveProfit,
+      floatingProfit,
+      floatingLoss,
+      marginAlert: accountSummary.marginAlert ?? { level: 'ok' as const },
+    }
+  }, [accessToken, accountSummary, positions])
 
   // Keep account status fresh; silently refresh tokens if access expired
   useEffect(() => {
