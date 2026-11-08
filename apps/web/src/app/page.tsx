@@ -29,8 +29,8 @@ import {
   type MarketSymbol,
 } from '@/hooks/useMarketData'
 import { useLiveMarketTicks } from '@/hooks/useLiveMarketTicks'
-import { contractSize } from '@/lib/contract-sizes'
 import { isDemoAutoLoginEnabled } from '@/lib/public-env'
+import { mapLivePositions } from '@/lib/live-position-pnl'
 import { useQueryClient } from '@tanstack/react-query'
 import { EMPTY_TRADING_ACCOUNT } from '@/lib/account-display'
 
@@ -247,74 +247,48 @@ export default function TradingPlatform() {
 
   const { positions: openPositions, refetch: refetchPositions } = useOpenPositions()
 
-  // Display positions with live BID/ASK overlay; same tick feed drives header Profit
-  const positions = useMemo(() => {
-    return openPositions.map((order) => {
-      const marketPrice = symbols.find((s) => s.symbol === order.symbol)
-      const currentPrice = marketPrice
-        ? order.side === 'BUY'
-          ? marketPrice.bid
-          : marketPrice.ask
-        : Number(order.currentPrice)
-
-      const size = contractSize(order.symbol)
-      const priceDiff =
-        order.side === 'BUY'
-          ? currentPrice - Number(order.openPrice)
-          : Number(order.openPrice) - currentPrice
-      const realTimeProfit = priceDiff * size * Number(order.lotSize)
-
-      return {
-        id: order.id,
-        openTime: order.openedAt,
-        symbol: order.symbol,
-        volume: Number(order.lotSize),
-        side: order.side,
-        openPrice: Number(order.openPrice),
-        currentPrice,
-        stopLoss: order.stopLoss ? Number(order.stopLoss) : 0,
-        takeProfit: order.takeProfit ? Number(order.takeProfit) : 0,
-        swap: order.swap ? Number(order.swap) : 0,
-        commission: order.commission ? Number(order.commission) : 0,
-        // Prefer live overlay for UI; backend summary poll settles official P/L
-        profit: Number.isFinite(realTimeProfit) ? realTimeProfit : Number(order.profit),
+  // One pass: row Net profit + header Profit from the same liveTicks map (same frame)
+  const { positions, account } = useMemo(() => {
+    const quoteMap: Record<string, { bid?: number; ask?: number }> = {}
+    for (const s of symbols) {
+      const tick = liveTicks[s.symbol]
+      quoteMap[s.symbol] = {
+        bid: Number(tick?.bid ?? s.bid),
+        ask: Number(tick?.ask ?? s.ask),
       }
-    })
-  }, [openPositions, symbols])
-
-  // Header Profit / equity / free margin tick in lockstep with open-trade Net profit
-  const account = useMemo(() => {
-    if (!accessToken || !accountSummary) {
-      return { ...EMPTY_TRADING_ACCOUNT, marginAlert: { level: 'ok' as const } }
     }
+    const live = mapLivePositions(openPositions, quoteMap)
+
+    if (!accessToken || !accountSummary) {
+      return {
+        positions: live.positions,
+        account: { ...EMPTY_TRADING_ACCOUNT, marginAlert: { level: 'ok' as const } },
+      }
+    }
+
     const balance = Number(accountSummary.balance)
     const credit = Number(accountSummary.credit ?? 0)
     const margin = Number(accountSummary.margin)
-    const liveProfit = positions.reduce((sum, p) => sum + Number(p.profit || 0), 0)
-    const floatingProfit = positions.reduce(
-      (sum, p) => sum + (Number(p.profit) > 0 ? Number(p.profit) : 0),
-      0
-    )
-    const floatingLoss = positions.reduce(
-      (sum, p) => sum + (Number(p.profit) < 0 ? Number(p.profit) : 0),
-      0
-    )
-    const equity = balance + credit + liveProfit
+    const equity = balance + credit + live.totalProfit
     const freeMargin = equity - margin
     const marginLevel = margin > 0 ? (equity / margin) * 100 : null
+
     return {
-      balance,
-      credit,
-      equity,
-      freeMargin,
-      margin,
-      marginLevel,
-      profit: liveProfit,
-      floatingProfit,
-      floatingLoss,
-      marginAlert: accountSummary.marginAlert ?? { level: 'ok' as const },
+      positions: live.positions,
+      account: {
+        balance,
+        credit,
+        equity,
+        freeMargin,
+        margin,
+        marginLevel,
+        profit: live.totalProfit,
+        floatingProfit: live.floatingProfit,
+        floatingLoss: live.floatingLoss,
+        marginAlert: accountSummary.marginAlert ?? { level: 'ok' as const },
+      },
     }
-  }, [accessToken, accountSummary, positions])
+  }, [accessToken, accountSummary, openPositions, symbols, liveTicks])
 
   useEffect(() => {
     const alert = account.marginAlert

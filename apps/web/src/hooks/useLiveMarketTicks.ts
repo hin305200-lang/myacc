@@ -27,7 +27,7 @@ type TickPayload = {
   source?: string
 }
 
-function tickToPartial(tick: TickPayload): Partial<MarketSymbol> & { symbol: string } | null {
+function tickToPartial(tick: TickPayload): (Partial<MarketSymbol> & { symbol: string }) | null {
   const provider = (tick.symbol || '').toUpperCase()
   if (!provider) return null
   const symbol = toPlatformSymbol(provider)
@@ -59,16 +59,37 @@ function tickToPartial(tick: TickPayload): Partial<MarketSymbol> & { symbol: str
 
 /**
  * Browser-side SignalR stream from biquote MT5 hub.
- * UI ticks update immediately; backend remains source of truth for P/L & balances.
+ * Ticks are coalesced to one React state update per animation frame so
+ * header Profit and row Net profit always paint together.
  */
 export function useLiveMarketTicks(enabled = true) {
   const [ticks, setTicks] = useState<Record<string, Partial<MarketSymbol>>>({})
   const [connected, setConnected] = useState(false)
   const connRef = useRef<HubConnection | null>(null)
+  const pendingRef = useRef<Record<string, Partial<MarketSymbol>>>({})
+  const rafRef = useRef<number>(0)
 
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
+
+    const flush = () => {
+      rafRef.current = 0
+      const batch = pendingRef.current
+      pendingRef.current = {}
+      if (Object.keys(batch).length === 0) return
+      setTicks((prev) => {
+        let changed = false
+        const next = { ...prev }
+        for (const [symbol, partial] of Object.entries(batch)) {
+          const prevBid = Number(prev[symbol]?.bid)
+          const prevAsk = Number(prev[symbol]?.ask)
+          if (prevBid !== Number(partial.bid) || prevAsk !== Number(partial.ask)) changed = true
+          next[symbol] = { ...prev[symbol], ...partial, symbol }
+        }
+        return changed ? next : prev
+      })
+    }
 
     const connection = new HubConnectionBuilder()
       .withUrl(HUB_URL)
@@ -81,7 +102,10 @@ export function useLiveMarketTicks(enabled = true) {
     connection.on('ReceiveTick', (tick: TickPayload) => {
       const partial = tickToPartial(tick)
       if (!partial) return
-      setTicks((prev) => ({ ...prev, [partial.symbol]: partial }))
+      pendingRef.current[partial.symbol] = partial
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(flush)
+      }
     })
 
     connection.onreconnected(async () => {
@@ -111,6 +135,9 @@ export function useLiveMarketTicks(enabled = true) {
     return () => {
       cancelled = true
       setConnected(false)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+      pendingRef.current = {}
       if (connection.state !== HubConnectionState.Disconnected) {
         connection.stop().catch(() => undefined)
       }

@@ -337,7 +337,8 @@ export const useOpenPositions = () => {
       return response.data
     },
     enabled: !!token,
-    refetchInterval: 2000, // Refetch every 2 seconds for real-time updates
+    // Live P/L comes from SignalR ticks; poll only to sync open/closed set
+    refetchInterval: 8_000,
   })
 
   // Listen for position updates from socket

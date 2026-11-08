@@ -6,6 +6,6 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "live-header-profit-sync-20261108"
+    "REDEPLOY_STAMP": "profit-same-frame-20261108"
   }
 }

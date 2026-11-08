@@ -134,7 +134,7 @@ export default function TradeMarketsLayout({
               }`}
             >
               {userId
-                ? `${account.profit >= 0 ? '' : '-'}$${formatCurrency(Math.abs(account.profit))}`
+                ? `${account.profit >= 0 ? '' : '-'}$${Math.abs(account.profit).toFixed(2)}`
                 : '—'}
             </span>
           </div>
