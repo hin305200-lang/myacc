@@ -6,6 +6,6 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "est-margin-leverage-fix-20261108"
+    "REDEPLOY_STAMP": "fast-close-balance-20261108b"
   }
 }

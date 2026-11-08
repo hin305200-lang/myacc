@@ -76,9 +76,8 @@ export default function BottomPanel({ positions, onClosePosition, onCloseAll }: 
       onCloseAll()
       return
     }
-    for (const id of targets) {
-      await handleClose(id)
-    }
+    // Close in parallel so multi-close stays under ~1s wall time
+    await Promise.all(targets.map((id) => handleClose(id)))
     setSelected({})
   }
 

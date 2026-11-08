@@ -51,7 +51,7 @@ const SWAP_PER_LOT: Record<string, { buy: number; sell: number }> = {
 }
 
 export function unitLabel(symbol: string): string {
-  return UNIT_LABEL[symbol] ?? symbol.replace(/USD$|EUR$|JPY$|NOK$|QAR$|MXN$/, '') || 'units'
+  return UNIT_LABEL[symbol] ?? (symbol.replace(/USD$|EUR$|JPY$|NOK$|QAR$|MXN$/, '') || 'units')
 }
 
 export function formatVolumeUnits(symbol: string, lotSize: number): string {

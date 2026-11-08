@@ -127,6 +127,47 @@ function slTpHit(side: string, bid: number, ask: number, stopLoss?: number | nul
   return null
 }
 
+function metricsFromParts(input: {
+  balance: number
+  credit: number
+  leverage: number
+  positions: Array<{ marginUsed?: unknown; profit?: unknown }>
+}): AccountMetrics {
+  let floating = 0
+  let margin = 0
+  let floatingProfit = 0
+  let floatingLoss = 0
+  for (const pos of input.positions) {
+    const p = Number(pos.profit)
+    floating += p
+    margin += Number(pos.marginUsed)
+    if (p >= 0) floatingProfit += p
+    else floatingLoss += p
+  }
+  const balance = roundMoney(input.balance)
+  const credit = roundMoney(input.credit)
+  const equity = roundMoney(balance + credit + floating)
+  margin = roundMoney(margin)
+  const freeMargin = roundMoney(equity - margin)
+  const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : null
+  const leverage = Math.max(1, input.leverage || DEFAULT_LEVERAGE)
+  return {
+    balance,
+    credit,
+    equity,
+    margin,
+    freeMargin,
+    marginLevel,
+    leverage,
+    floatingProfit: roundMoney(floatingProfit),
+    floatingLoss: roundMoney(floatingLoss),
+    netFloatingPl: roundMoney(floating),
+    marginCallLevel: MARGIN_CALL_LEVEL,
+    stopOutLevel: STOP_OUT_LEVEL,
+    marginAlert: evaluateMarginLevel(marginLevel, margin),
+  }
+}
+
 async function settleClose(
   position: OpenPosRow,
   userId: string,
@@ -150,11 +191,26 @@ async function settleClose(
   })
   if (closed.count === 0) throw new Error('Order not found')
 
-  const user = await prisma.user.findUnique({ where: { id: userId } })
+  // One parallel read after close — no second applyAccountTotals round-trip
+  const [user, remaining] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.position.findMany({
+      where: { userId, status: 'OPEN' },
+      select: { marginUsed: true, profit: true },
+    }),
+  ])
   if (!user) return null
 
   const balanceBefore = Number(user.balance)
   const newBalance = roundMoney(balanceBefore + realized)
+  const credit = Number((user as any).credit ?? 0)
+  const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
+  const metrics = metricsFromParts({
+    balance: newBalance,
+    credit,
+    leverage,
+    positions: remaining,
+  })
 
   await Promise.all([
     prisma.closedTrade.create({
@@ -183,67 +239,50 @@ async function settleClose(
     }),
     prisma.user.update({
       where: { id: userId },
-      data: { balance: newBalance },
+      data: {
+        balance: newBalance,
+        equity: metrics.equity,
+        margin: metrics.margin,
+        freeMargin: metrics.freeMargin,
+        marginLevel: metrics.marginLevel ?? 0,
+        leverage,
+      },
     }),
   ])
 
-  return applyAccountTotals(userId)
+  return metrics
 }
 
 /** Fast equity refresh from DB numbers only (no external quote calls). */
 export async function applyAccountTotals(userId: string): Promise<AccountMetrics | null> {
   const [user, positions] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
-    prisma.position.findMany({ where: { userId, status: 'OPEN' } }),
+    prisma.position.findMany({
+      where: { userId, status: 'OPEN' },
+      select: { marginUsed: true, profit: true },
+    }),
   ])
   if (!user) return null
 
-  let floating = 0
-  let margin = 0
-  let floatingProfit = 0
-  let floatingLoss = 0
-  for (const pos of positions) {
-    const p = Number(pos.profit)
-    floating += p
-    margin += Number(pos.marginUsed)
-    if (p >= 0) floatingProfit += p
-    else floatingLoss += p
-  }
-
-  const balance = Number(user.balance)
-  const credit = Number((user as any).credit ?? 0)
-  const equity = roundMoney(balance + credit + floating)
-  margin = roundMoney(margin)
-  const freeMargin = roundMoney(equity - margin)
-  const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : null
-  const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
+  const metrics = metricsFromParts({
+    balance: Number(user.balance),
+    credit: Number((user as any).credit ?? 0),
+    leverage: Math.max(1, user.leverage || DEFAULT_LEVERAGE),
+    positions,
+  })
 
   await prisma.user.update({
     where: { id: userId },
     data: {
-      equity,
-      margin,
-      freeMargin,
-      marginLevel: marginLevel ?? 0,
-      leverage,
+      equity: metrics.equity,
+      margin: metrics.margin,
+      freeMargin: metrics.freeMargin,
+      marginLevel: metrics.marginLevel ?? 0,
+      leverage: metrics.leverage,
     },
   })
 
-  return {
-    balance: roundMoney(balance),
-    credit: roundMoney(credit),
-    equity,
-    margin,
-    freeMargin,
-    marginLevel,
-    leverage,
-    floatingProfit: roundMoney(floatingProfit),
-    floatingLoss: roundMoney(floatingLoss),
-    netFloatingPl: roundMoney(floating),
-    marginCallLevel: MARGIN_CALL_LEVEL,
-    stopOutLevel: STOP_OUT_LEVEL,
-    marginAlert: evaluateMarginLevel(marginLevel, margin),
-  }
+  return metrics
 }
 
 /**
@@ -469,6 +508,30 @@ export async function placeMarketOrder(
     },
   })
 
+  let floatingProfit = 0
+  let floatingLoss = 0
+  for (const pos of openPositions) {
+    const p = Number(pos.profit)
+    if (p >= 0) floatingProfit += p
+    else floatingLoss += p
+  }
+
+  const account: AccountMetrics = {
+    balance: newBalance,
+    credit: roundMoney(credit),
+    equity: equityAfter,
+    margin: marginAfter,
+    freeMargin: freeAfter,
+    marginLevel: marginAfter > 0 ? levelAfter : null,
+    leverage,
+    floatingProfit: roundMoney(floatingProfit),
+    floatingLoss: roundMoney(floatingLoss),
+    netFloatingPl: roundMoney(floating),
+    marginCallLevel: MARGIN_CALL_LEVEL,
+    stopOutLevel: STOP_OUT_LEVEL,
+    marginAlert: evaluateMarginLevel(marginAfter > 0 ? levelAfter : null, marginAfter),
+  }
+
   await Promise.all([
     ...(commission !== 0
       ? [
@@ -497,7 +560,7 @@ export async function placeMarketOrder(
     }),
   ])
 
-  const account = await applyAccountTotals(userId)
+  // Return metrics computed above — skip extra applyAccountTotals DB round-trip
   return { position, account }
 }
 

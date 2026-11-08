@@ -34,6 +34,10 @@ import { mapLivePositions, sumUsedMargin } from '@/lib/live-position-pnl'
 import { useQueryClient } from '@tanstack/react-query'
 import { EMPTY_TRADING_ACCOUNT } from '@/lib/account-display'
 
+function roundOptimistic(n: number) {
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
 const symbolMeta: Record<string, { icon: string }> = {
   EURUSD: { icon: '€' },
   GBPUSD: { icon: '£' },
@@ -464,11 +468,44 @@ export default function TradingPlatform() {
       return
     }
     const openRow = openPositions.find((p) => p.id === id)
+    const liveRow = positions.find((p) => p.id === id)
     const market = openRow ? symbols.find((s) => s.symbol === openRow.symbol) : undefined
-    // Optimistic remove for instant UI
+    // Instant P/L → balance (profit adds, loss subtracts) before the API returns
+    const estimatedPl = Number(liveRow?.profit ?? openRow?.profit ?? 0)
+    const prevPositions = queryClient.getQueryData(['positions-open'])
+    const prevAccount = queryClient.getQueryData(['account-summary'])
+
     queryClient.setQueryData(['positions-open'], (prev: any[] | undefined) =>
       (prev || []).filter((p) => p.id !== id)
     )
+    queryClient.setQueryData(['account-summary'], (prev: any) => {
+      if (!prev || typeof prev !== 'object') return prev
+      const balance = roundOptimistic(Number(prev.balance) + estimatedPl)
+      const credit = Number(prev.credit ?? 0)
+      const leverage = Number(prev.leverage ?? 10)
+      const remaining = (Array.isArray(prevPositions) ? prevPositions : openPositions).filter(
+        (p: any) => p.id !== id
+      )
+      const margin = sumUsedMargin(remaining, leverage)
+      // Remaining floating is approximated from live rows excluding the closed one
+      const remainingFloating = positions
+        .filter((p) => p.id !== id)
+        .reduce((sum, p) => sum + Number(p.profit || 0), 0)
+      const equity = balance + credit + remainingFloating
+      return {
+        ...prev,
+        balance,
+        equity,
+        margin,
+        freeMargin: equity - margin,
+        marginLevel: margin > 0 ? (equity / margin) * 100 : null,
+        profit: remainingFloating,
+        floatingProfit: Math.max(0, remainingFloating),
+        floatingLoss: Math.min(0, remainingFloating),
+        netFloatingPl: remainingFloating,
+      }
+    })
+
     try {
       const result = await apiClient.post<{ success: boolean; profit: number; account?: any }>(
         `/orders/${id}/close`,
@@ -480,14 +517,22 @@ export default function TradingPlatform() {
         accessToken
       )
       applyAccountFromResponse((result as any).account)
-      setToast({ message: 'Position closed', type: 'success' })
+      setToast({
+        message:
+          Number.isFinite((result as any).profit)
+            ? `Closed · P/L $${Number((result as any).profit).toFixed(2)}`
+            : 'Position closed',
+        type: 'success',
+      })
       void refetchPositions()
       void queryClient.invalidateQueries({ queryKey: ['positions-closed'] })
-      void queryClient.invalidateQueries({ queryKey: ['account-summary'] })
       void queryClient.invalidateQueries({ queryKey: ['account-transactions'] })
     } catch (error: any) {
       console.error('Close position failed', error)
+      if (prevPositions !== undefined) queryClient.setQueryData(['positions-open'], prevPositions)
+      if (prevAccount !== undefined) queryClient.setQueryData(['account-summary'], prevAccount)
       void refetchPositions()
+      void queryClient.invalidateQueries({ queryKey: ['account-summary'] })
       const errorMessage =
         error?.response?.data?.error?.message ||
         error?.message ||
