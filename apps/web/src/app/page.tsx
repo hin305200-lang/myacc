@@ -30,7 +30,7 @@ import {
 } from '@/hooks/useMarketData'
 import { useLiveMarketTicks } from '@/hooks/useLiveMarketTicks'
 import { isDemoAutoLoginEnabled } from '@/lib/public-env'
-import { mapLivePositions } from '@/lib/live-position-pnl'
+import { mapLivePositions, sumUsedMargin } from '@/lib/live-position-pnl'
 import { useQueryClient } from '@tanstack/react-query'
 import { EMPTY_TRADING_ACCOUNT } from '@/lib/account-display'
 
@@ -268,7 +268,9 @@ export default function TradingPlatform() {
 
     const balance = Number(accountSummary.balance)
     const credit = Number(accountSummary.credit ?? 0)
-    const margin = Number(accountSummary.margin)
+    const leverage = Number(accountSummary.leverage ?? 10)
+    // Gross margin from every open (BUY + SELL) — never net opposite sides to 0
+    const margin = sumUsedMargin(openPositions, leverage)
     const equity = balance + credit + live.totalProfit
     const freeMargin = equity - margin
     const marginLevel = margin > 0 ? (equity / margin) * 100 : null

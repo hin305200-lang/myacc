@@ -7,12 +7,29 @@ export type OpenPositionLike = {
   lotSize?: number | string
   openPrice?: number | string
   currentPrice?: number | string
+  marginUsed?: number | string | null
   profit?: number | string
   openedAt?: string
   stopLoss?: number | string | null
   takeProfit?: number | string | null
   swap?: number | string | null
   commission?: number | string | null
+}
+
+/** Used margin for one position — prefer stored marginUsed; else lots × contract × open / leverage. */
+export function calcPositionMargin(order: OpenPositionLike, leverage = 10): number {
+  const stored = Number(order.marginUsed)
+  if (Number.isFinite(stored) && stored > 0) return stored
+  const lots = Number(order.lotSize)
+  const price = Number(order.openPrice)
+  const lev = Math.max(1, leverage || 10)
+  if (!(lots > 0) || !(price > 0)) return 0
+  return (lots * contractSize(String(order.symbol || '')) * price) / lev
+}
+
+/** Gross used margin across all opens (BUY and SELL both count — no hedge netting). */
+export function sumUsedMargin(orders: OpenPositionLike[], leverage = 10): number {
+  return orders.reduce((sum, order) => sum + calcPositionMargin(order, leverage), 0)
 }
 
 export type LiveQuote = { bid?: number; ask?: number }

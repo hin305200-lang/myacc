@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
+  ArrowRight,
   BarChart3,
   Wallet,
   Settings,
@@ -116,7 +117,7 @@ export default function TradeMarketsLayout({
             label="Margin Level"
             value={
               userId
-                ? account.marginLevel != null && account.marginLevel > 0
+                ? account.margin > 0 && account.marginLevel != null && Number.isFinite(account.marginLevel)
                   ? `${Number(account.marginLevel).toFixed(2)}%`
                   : 'N/A'
                 : '—'
@@ -152,6 +153,21 @@ export default function TradeMarketsLayout({
         </div>
 
         <div className="relative flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (userId) {
+                onPageChange?.('wallet')
+                setMenuOpen(false)
+              } else {
+                onLogin?.()
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#10b981] px-3 py-1.5 text-[11px] font-semibold text-white shadow-[0_0_12px_rgba(16,185,129,0.35)] hover:brightness-110"
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+            Deposit
+          </button>
           {isAdmin && (
             <Link
               href="/admin"

@@ -440,6 +440,12 @@ export async function placeMarketOrder(
   }
 
   const newBalance = roundMoney(balance - commission)
+  // Gross margin: existing opens + this fill (BUY and SELL both add — no hedge netting)
+  const marginAfter = roundMoney(usedMargin + marginUsed)
+  const equityAfter = roundMoney(newBalance + credit + floating)
+  const freeAfter = roundMoney(equityAfter - marginAfter)
+  const levelAfter = marginAfter > 0 ? roundMoney((equityAfter / marginAfter) * 100) : 0
+
   const position = await prisma.position.create({
     data: {
       userId,
@@ -474,7 +480,14 @@ export async function placeMarketOrder(
       : []),
     prisma.user.update({
       where: { id: userId },
-      data: { balance: newBalance },
+      data: {
+        balance: newBalance,
+        margin: marginAfter,
+        equity: equityAfter,
+        freeMargin: freeAfter,
+        marginLevel: levelAfter,
+        leverage,
+      },
     }),
   ])
 
