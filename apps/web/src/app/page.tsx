@@ -415,6 +415,9 @@ export default function TradingPlatform() {
           lotSize,
           stopLoss: stopLoss ? parseFloat(stopLoss.toString()) : undefined,
           takeProfit: takeProfit ? parseFloat(takeProfit.toString()) : undefined,
+          bid: selectedSymbol.bid,
+          ask: selectedSymbol.ask,
+          quoteTs: Date.now(),
         },
         accessToken
       )
@@ -464,6 +467,8 @@ export default function TradingPlatform() {
       })
       return
     }
+    const openRow = openPositions.find((p) => p.id === id)
+    const market = openRow ? symbols.find((s) => s.symbol === openRow.symbol) : undefined
     // Optimistic remove for instant UI
     queryClient.setQueryData(['positions-open'], (prev: any[] | undefined) =>
       (prev || []).filter((p) => p.id !== id)
@@ -471,7 +476,11 @@ export default function TradingPlatform() {
     try {
       const result = await apiClient.post<{ success: boolean; profit: number; account?: any }>(
         `/orders/${id}/close`,
-        {},
+        {
+          bid: market?.bid,
+          ask: market?.ask,
+          quoteTs: Date.now(),
+        },
         accessToken
       )
       applyAccountFromResponse((result as any).account)

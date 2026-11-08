@@ -640,6 +640,9 @@ async function handleOrders(req: NextRequest, parts: string[]): Promise<HandlerR
         lotSize: z.number().positive().min(0.01).max(1000),
         stopLoss: z.number().positive().optional(),
         takeProfit: z.number().positive().optional(),
+        bid: z.number().positive().optional(),
+        ask: z.number().positive().optional(),
+        quoteTs: z.number().int().positive().optional(),
       })
       .safeParse(body)
     if (!parsed.success) return json({ error: parsed.error.flatten() }, 400)
@@ -666,8 +669,20 @@ async function handleOrders(req: NextRequest, parts: string[]): Promise<HandlerR
   }
 
   if (req.method === 'POST' && parts[1] && parts[2] === 'close') {
+    const body = await readJsonBody(req)
+    const tip = z
+      .object({
+        bid: z.number().positive().optional(),
+        ask: z.number().positive().optional(),
+        quoteTs: z.number().int().positive().optional(),
+      })
+      .safeParse(body || {})
     try {
-      const result = await closePosition(parts[1], auth.userId)
+      const result = await closePosition(
+        parts[1],
+        auth.userId,
+        tip.success ? tip.data : undefined
+      )
       return json(result)
     } catch (error: any) {
       return json({ error: error?.message || 'Close failed' }, 400)

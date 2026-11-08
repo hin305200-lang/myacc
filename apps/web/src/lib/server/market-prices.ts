@@ -57,8 +57,10 @@ let lastBatchFetch = 0
 let fetchPromise: Promise<void> | null = null
 /** Soft cache for UI / mark-to-market (ms) */
 const CACHE_TTL_MS = 1_500
-/** Prefer cached quote for trade execution if newer than this */
-const EXECUTION_CACHE_MS = 5_000
+/** Prefer cached quote for trade execution if newer than this (serverless warm instances) */
+const EXECUTION_CACHE_MS = 30_000
+/** Accept client-sent BID/ASK for fills when newer than this */
+const CLIENT_QUOTE_MAX_AGE_MS = 20_000
 const quoteFetchedAt = new Map<string, number>()
 
 function roundPrice(n: number, digits = 5) {
@@ -311,6 +313,72 @@ export async function assertExecutableQuote(symbol: string): Promise<MarketQuote
     )
   }
   return quote
+}
+
+/** Memory-only peek — never hits the network (important on Vercel cold paths). */
+export function peekCachedQuote(symbol: string): MarketQuote | null {
+  const platform = symbol.toUpperCase()
+  const cached = quoteCache.get(platform)
+  if (!cached || !(cached.bid > 0) || !(cached.ask > 0)) return null
+  return cached
+}
+
+export type ClientQuoteTip = {
+  bid?: number
+  ask?: number
+  quoteTs?: number
+}
+
+/**
+ * Fast execution quote: prefer fresh client tip (from the live UI), then warm cache,
+ * then network fetch. Avoids a round-trip to the price provider on most opens/closes.
+ */
+export async function resolveExecutableQuote(
+  symbol: string,
+  tip?: ClientQuoteTip
+): Promise<MarketQuote> {
+  const platform = symbol.toUpperCase()
+  const now = Date.now()
+  const tipBid = tip?.bid != null ? Number(tip.bid) : NaN
+  const tipAsk = tip?.ask != null ? Number(tip.ask) : NaN
+  const tipOk =
+    Number.isFinite(tipBid) &&
+    Number.isFinite(tipAsk) &&
+    tipBid > 0 &&
+    tipAsk > 0 &&
+    tipAsk >= tipBid &&
+    (tip?.quoteTs == null || now - Number(tip.quoteTs) <= CLIENT_QUOTE_MAX_AGE_MS)
+
+  const cached = peekCachedQuote(platform)
+  if (cached && (!cached.tradable || cached.marketStatus !== 'open')) {
+    throw new Error(
+      `Market for ${platform} is ${cached.marketStatus}${cached.stale ? ' (stale quote)' : ''}. Trading is paused until a live quote is available.`
+    )
+  }
+
+  if (tipOk) {
+    const base = cached || unavailableQuote(platform)
+    return {
+      ...base,
+      symbol: platform,
+      bid: tipBid,
+      ask: tipAsk,
+      price: (tipBid + tipAsk) / 2,
+      spread: tipAsk - tipBid,
+      tradable: true,
+      marketStatus: 'open',
+      feedStatus: 'live',
+      dataSource: 'live',
+      stale: false,
+    }
+  }
+
+  if (cached && cached.tradable && cached.marketStatus === 'open') {
+    const age = now - (quoteFetchedAt.get(platform) || 0)
+    if (age < EXECUTION_CACHE_MS) return cached
+  }
+
+  return assertExecutableQuote(platform)
 }
 
 export type CatalogInfo = {
