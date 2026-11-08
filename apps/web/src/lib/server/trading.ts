@@ -128,25 +128,30 @@ async function settleClose(
   profit: number,
   reason: string
 ): Promise<AccountMetrics | null> {
+  // Avoid interactive $transaction — Supabase/PgBouncer often fails with
+  // "Unable to start a transaction in the given time".
   const realized = roundMoney(profit)
 
-  return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId } })
-    if (!user) return null
+  const closed = await prisma.position.updateMany({
+    where: { id: position.id, userId, status: 'OPEN' },
+    data: {
+      status: 'CLOSED',
+      closePrice,
+      currentPrice: closePrice,
+      profit: realized,
+      closedAt: new Date(),
+    },
+  })
+  if (closed.count === 0) throw new Error('Order not found')
 
-    const newBalance = roundMoney(Number(user.balance) + realized)
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user) return null
 
-    await tx.position.update({
-      where: { id: position.id },
-      data: {
-        status: 'CLOSED',
-        closePrice,
-        currentPrice: closePrice,
-        profit: realized,
-        closedAt: new Date(),
-      },
-    })
-    await tx.closedTrade.create({
+  const balanceBefore = Number(user.balance)
+  const newBalance = roundMoney(balanceBefore + realized)
+
+  await Promise.all([
+    prisma.closedTrade.create({
       data: {
         userId,
         symbol: position.symbol,
@@ -159,68 +164,24 @@ async function settleClose(
         commission: position.commission,
         openedAt: position.openedAt,
       },
-    })
-    await tx.transaction.create({
+    }),
+    prisma.transaction.create({
       data: {
         userId,
         type: realized >= 0 ? 'TRADE_PROFIT' : 'TRADE_LOSS',
         amount: realized,
-        balanceBefore: Number(user.balance),
+        balanceBefore,
         balanceAfter: newBalance,
         note: reason,
       },
-    })
-
-    const remaining = await tx.position.findMany({
-      where: { userId, status: 'OPEN' },
-      select: { marginUsed: true, profit: true },
-    })
-    let floating = 0
-    let margin = 0
-    let floatingProfit = 0
-    let floatingLoss = 0
-    for (const pos of remaining) {
-      const p = Number(pos.profit)
-      floating += p
-      margin += Number(pos.marginUsed)
-      if (p >= 0) floatingProfit += p
-      else floatingLoss += p
-    }
-    const credit = Number((user as any).credit ?? 0)
-    const equity = roundMoney(newBalance + credit + floating)
-    margin = roundMoney(margin)
-    const freeMargin = roundMoney(equity - margin)
-    const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : null
-    const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
-
-    await tx.user.update({
+    }),
+    prisma.user.update({
       where: { id: userId },
-      data: {
-        balance: newBalance,
-        equity,
-        margin,
-        freeMargin,
-        marginLevel: marginLevel ?? 0,
-        leverage,
-      },
-    })
+      data: { balance: newBalance },
+    }),
+  ])
 
-    return {
-      balance: roundMoney(newBalance),
-      credit: roundMoney(credit),
-      equity,
-      margin,
-      freeMargin,
-      marginLevel,
-      leverage,
-      floatingProfit: roundMoney(floatingProfit),
-      floatingLoss: roundMoney(floatingLoss),
-      netFloatingPl: roundMoney(floating),
-      marginCallLevel: MARGIN_CALL_LEVEL,
-      stopOutLevel: STOP_OUT_LEVEL,
-      marginAlert: evaluateMarginLevel(marginLevel, margin),
-    }
-  })
+  return applyAccountTotals(userId)
 }
 
 /** Fast equity refresh from DB numbers only (no external quote calls). */
@@ -440,120 +401,85 @@ export async function placeMarketOrder(
     }
   }
 
-  const tip: ClientQuoteTip = { bid: input.bid, ask: input.ask, quoteTs: input.quoteTs }
-
-  // Serialize opens per user so a double-click / parallel request cannot open two fills.
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`
-
-    const lockedUser = await tx.user.findUnique({ where: { id: userId } })
-    if (!lockedUser) throw new Error('User not found')
-    if (lockedUser.status !== 'ACTIVE') {
-      throw new Error('Account is not active. Please wait for admin approval before trading.')
-    }
-
-    const leverage = Math.max(1, lockedUser.leverage || DEFAULT_LEVERAGE)
-    const marginRequired = calculateMargin({
-      lotSize: input.lotSize,
-      price,
-      leverage,
-      symbol,
-    })
-    const marginUsed = roundMoney(marginRequired)
-    const commission = roundMoney(calculateCommission(symbol, input.lotSize, price))
-
-    const openPositions = await tx.position.findMany({
+  // No interactive transaction (PgBouncer/Supabase pooler cannot start them reliably).
+  const [user, openPositions] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.position.findMany({
       where: { userId, status: 'OPEN' },
       select: { marginUsed: true, profit: true },
-    })
-    let usedMargin = 0
-    let floating = 0
-    let floatingProfit = 0
-    let floatingLoss = 0
-    for (const pos of openPositions) {
-      const p = Number(pos.profit)
-      usedMargin += Number(pos.marginUsed)
-      floating += p
-      if (p >= 0) floatingProfit += p
-      else floatingLoss += p
-    }
-    const balance = Number(lockedUser.balance)
-    const credit = Number((lockedUser as any).credit ?? 0)
-    const equityBefore = roundMoney(balance + credit + floating)
-    const available = roundMoney(equityBefore - usedMargin)
-    if (available < marginRequired) {
-      throw new Error(
-        `Insufficient free margin. Required: $${marginUsed.toFixed(2)}, Available: $${available.toFixed(2)}`
-      )
-    }
+    }),
+  ])
+  if (!user) throw new Error('User not found')
+  if (user.status !== 'ACTIVE') {
+    throw new Error('Account is not active. Please wait for admin approval before trading.')
+  }
 
-    const newBalance = roundMoney(balance - commission)
-    const created = await tx.position.create({
-      data: {
-        userId,
-        symbol,
-        side: input.side,
-        lotSize: input.lotSize,
-        openPrice: price,
-        currentPrice: price,
-        stopLoss: input.stopLoss,
-        takeProfit: input.takeProfit,
-        marginUsed,
-        commission,
-        profit: 0,
-        status: 'OPEN',
-      },
-    })
-    if (commission !== 0) {
-      await tx.transaction.create({
-        data: {
-          userId,
-          type: 'ADJUSTMENT',
-          amount: -commission,
-          balanceBefore: balance,
-          balanceAfter: newBalance,
-          note: `Commission ${symbol} ${input.side} ${input.lotSize} lot`,
-        },
-      })
-    }
+  const leverage = Math.max(1, user.leverage || DEFAULT_LEVERAGE)
+  const marginRequired = calculateMargin({
+    lotSize: input.lotSize,
+    price,
+    leverage,
+    symbol,
+  })
+  const marginUsed = roundMoney(marginRequired)
+  const commission = roundMoney(calculateCommission(symbol, input.lotSize, price))
 
-    const margin = roundMoney(usedMargin + marginUsed)
-    const equity = roundMoney(newBalance + credit + floating)
-    const freeMargin = roundMoney(equity - margin)
-    const marginLevel = margin > 0 ? roundMoney((equity / margin) * 100) : null
+  let usedMargin = 0
+  let floating = 0
+  for (const pos of openPositions) {
+    usedMargin += Number(pos.marginUsed)
+    floating += Number(pos.profit)
+  }
+  const balance = Number(user.balance)
+  const credit = Number((user as any).credit ?? 0)
+  const available = roundMoney(balance + credit + floating - usedMargin)
+  if (available < marginRequired) {
+    throw new Error(
+      `Insufficient free margin. Required: $${marginUsed.toFixed(2)}, Available: $${available.toFixed(2)}`
+    )
+  }
 
-    await tx.user.update({
-      where: { id: userId },
-      data: {
-        balance: newBalance,
-        equity,
-        margin,
-        freeMargin,
-        marginLevel: marginLevel ?? 0,
-        leverage,
-      },
-    })
-
-    const account: AccountMetrics = {
-      balance: roundMoney(newBalance),
-      credit: roundMoney(credit),
-      equity,
-      margin,
-      freeMargin,
-      marginLevel,
-      leverage,
-      floatingProfit: roundMoney(floatingProfit),
-      floatingLoss: roundMoney(floatingLoss),
-      netFloatingPl: roundMoney(floating),
-      marginCallLevel: MARGIN_CALL_LEVEL,
-      stopOutLevel: STOP_OUT_LEVEL,
-      marginAlert: evaluateMarginLevel(marginLevel, margin),
-    }
-
-    return { position: created, account }
+  const newBalance = roundMoney(balance - commission)
+  const position = await prisma.position.create({
+    data: {
+      userId,
+      symbol,
+      side: input.side,
+      lotSize: input.lotSize,
+      openPrice: price,
+      currentPrice: price,
+      stopLoss: input.stopLoss,
+      takeProfit: input.takeProfit,
+      marginUsed,
+      commission,
+      profit: 0,
+      status: 'OPEN',
+    },
   })
 
-  return result
+  await Promise.all([
+    ...(commission !== 0
+      ? [
+          prisma.transaction.create({
+            data: {
+              userId,
+              type: 'ADJUSTMENT',
+              amount: -commission,
+              balanceBefore: balance,
+              balanceAfter: newBalance,
+              note: `Commission ${symbol} ${input.side} ${input.lotSize} lot`,
+            },
+          }),
+        ]
+      : []),
+    prisma.user.update({
+      where: { id: userId },
+      data: { balance: newBalance },
+    }),
+  ])
+
+  const account = await applyAccountTotals(userId)
+  return { position, account }
 }
 
 export async function closePosition(
