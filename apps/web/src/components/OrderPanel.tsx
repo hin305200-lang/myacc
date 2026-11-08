@@ -93,7 +93,7 @@ export default function OrderPanel({
   }
 
   const handleTrade = (side: 'BUY' | 'SELL') => {
-    if (tradeLoading || tradingLocked || marketClosed || symbol?.tradable === false || submittingRef.current) {
+    if (tradeLoading || tradingLocked || buttonsDisabled || submittingRef.current) {
       return
     }
     submittingRef.current = true
@@ -294,9 +294,9 @@ export default function OrderPanel({
           {tradingLockedReason || 'Waiting for admin approval before trading'}
         </div>
       )}
-      {!tradingLocked && marketClosed && !tradeLoading && (
+      {!tradingLocked && noQuote && !tradeLoading && (
         <div className="absolute inset-x-0 bottom-0 z-40 border-t border-amber-500/30 bg-amber-500/15 px-3 py-2 text-center text-xs text-amber-100">
-          Market closed or quote stale — trading resumes when the live feed reopens
+          Waiting for BID/ASK — trading unlocks when a quote arrives
         </div>
       )}
     </div>
