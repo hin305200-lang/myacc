@@ -139,16 +139,6 @@ export default function TradingPlatform() {
   }, [symbols, selectedSymbol])
 
   const lastMarginAlert = useRef<string>('')
-  useEffect(() => {
-    const alert = account.marginAlert
-    if (!alert || alert.level === 'ok') return
-    if (lastMarginAlert.current === alert.message) return
-    lastMarginAlert.current = alert.message
-    setToast({
-      message: alert.message,
-      type: alert.level === 'stop_out' ? 'error' : 'info',
-    })
-  }, [account.marginAlert])
 
   // Wait for localStorage rehydrate before deciding to show login
   useEffect(() => {
@@ -325,6 +315,17 @@ export default function TradingPlatform() {
       marginAlert: accountSummary.marginAlert ?? { level: 'ok' as const },
     }
   }, [accessToken, accountSummary, positions])
+
+  useEffect(() => {
+    const alert = account.marginAlert
+    if (!alert || alert.level === 'ok') return
+    if (lastMarginAlert.current === alert.message) return
+    lastMarginAlert.current = alert.message
+    setToast({
+      message: alert.message,
+      type: alert.level === 'stop_out' ? 'error' : 'info',
+    })
+  }, [account.marginAlert])
 
   // Keep account status fresh; silently refresh tokens if access expired
   useEffect(() => {
