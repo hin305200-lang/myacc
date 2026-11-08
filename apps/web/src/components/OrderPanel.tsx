@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TrendingUp, TrendingDown, Shield } from 'lucide-react'
+import { contractSize } from '@/lib/contract-sizes'
 import { effectiveLeverage, estimateMargin } from '@/lib/estimate-margin'
+import { formatVolumeUnits, minPriceChange, swapRates, unitLabel } from '@/lib/instrument-display'
 
 interface MarketSymbol {
   symbol: string
@@ -210,6 +212,30 @@ export default function OrderPanel({
 
         <div className="text-[10px] text-[#94a3b8] space-y-1 pt-2 border-t border-[#1e293b]">
           <div className="flex justify-between items-center gap-1 py-0.5">
+            <span className="shrink-0">Volume (Lot)</span>
+            <span className="text-white font-mono truncate text-right">
+              {lotSize} Lot = {formatVolumeUnits(symbol.symbol, lotSize)}
+            </span>
+          </div>
+          <div className="flex justify-between items-center gap-1 py-0.5">
+            <span className="shrink-0">1 Lot</span>
+            <span className="text-white font-mono truncate">
+              {contractSize(symbol.symbol).toLocaleString()} {unitLabel(symbol.symbol)}
+            </span>
+          </div>
+          <div className="flex justify-between items-center gap-1 py-0.5">
+            <span className="shrink-0">Required Margin</span>
+            <span className="text-[#f59e0b] font-mono truncate font-semibold">
+              ${estimatedMarginBuy.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex justify-between items-center gap-1 py-0.5">
+            <span className="shrink-0">Est. margin SELL</span>
+            <span className="text-[#ef4444] font-mono truncate">
+              ${estimatedMarginSell.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex justify-between items-center gap-1 py-0.5">
             <span className="shrink-0">Spread</span>
             <span className="text-white font-mono truncate">{formatPrice(symbol.spread)}</span>
           </div>
@@ -218,15 +244,26 @@ export default function OrderPanel({
             <span className="text-white font-semibold">1:{lev}</span>
           </div>
           <div className="flex justify-between items-center gap-1 py-0.5">
-            <span className="shrink-0">Est. margin BUY</span>
-            <span className="text-[#10b981] font-mono truncate">${estimatedMarginBuy.toFixed(2)}</span>
+            <span className="shrink-0">Swap Buy (1 Lot)</span>
+            <span className="text-white font-mono truncate">{swapRates(symbol.symbol).buy.toFixed(2)}</span>
           </div>
           <div className="flex justify-between items-center gap-1 py-0.5">
-            <span className="shrink-0">Est. margin SELL</span>
-            <span className="text-[#ef4444] font-mono truncate">${estimatedMarginSell.toFixed(2)}</span>
+            <span className="shrink-0">Swap Sell (1 Lot)</span>
+            <span className="text-white font-mono truncate">{swapRates(symbol.symbol).sell.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center gap-1 py-0.5">
+            <span className="shrink-0">Minimum change</span>
+            <span className="text-white font-mono truncate">{minPriceChange(symbol.symbol)}</span>
+          </div>
+          <div className="flex justify-between items-center gap-1 py-0.5">
+            <span className="shrink-0">Commission</span>
+            <span className="text-white font-mono truncate">—</span>
           </div>
           <p className="pt-1 text-[9px] leading-relaxed text-[#64748b]">
-            Margin = (lots × contract × price) ÷ leverage. Example: 1 BTCUSD ÷ 1:{lev} = price/{lev}.
+            Margin = (lots × contract × price) ÷ leverage — same for all assets.
+            {symbol.symbol === 'BTCUSD'
+              ? ` 1 lot = 100 BTC → @ ask ÷ 1:${lev} ≈ $${estimatedMarginBuy.toLocaleString(undefined, { maximumFractionDigits: 0 })}.`
+              : null}
           </p>
           {symbol.marketStatus && symbol.marketStatus !== 'open' && (
             <div className="pt-1 text-[11px] text-amber-300">

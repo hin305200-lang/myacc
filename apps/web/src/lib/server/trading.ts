@@ -33,8 +33,8 @@ export function calculateMargin({
   leverage: number
   symbol: string
 }) {
-  // Margin = (lots × contract × price) / leverage
-  // e.g. 1 BTCUSD @ $68,000 with 1:10 → $6,800
+  // Margin = (lots × contract × price) / leverage — same for every asset
+  // e.g. 1 BTCUSD lot (100 BTC) @ $75,950 with 1:10 → $759,500
   const raw = Number(leverage)
   const lev = Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_LEVERAGE
   const lots = Number(lotSize)
@@ -45,8 +45,9 @@ export function calculateMargin({
 }
 
 function calculateCommission(symbol: string, lotSize: number, price: number) {
+  // ~0.01% of notional for crypto (keeps fees sane with 100-coin lots)
   if (['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD'].includes(symbol)) {
-    return lotSize * contractSizeFor(symbol) * price * 0.001
+    return lotSize * contractSizeFor(symbol) * price * 0.0001
   }
   if (['AAPL', 'MSFT', 'AMZN', 'TSLA', 'NVDA', 'GOOGL', 'META', 'NFLX', 'AMD'].includes(symbol)) {
     return 1 * lotSize

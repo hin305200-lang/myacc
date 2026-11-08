@@ -9,7 +9,9 @@ export function effectiveLeverage(leverage?: number | null): number {
 
 /**
  * Required margin = (lots × contract size × price) / leverage
- * Example: 1 BTCUSD @ $68,000 with 1:10 → $6,800
+ * Same formula for every asset.
+ * Example: 1 BTCUSD lot (= 100 BTC) @ $75,950 with 1:10
+ *   → (1 × 100 × 75950) / 10 = $759,500
  */
 export function estimateMargin(input: {
   symbol: string
@@ -23,4 +25,14 @@ export function estimateMargin(input: {
   const lev = effectiveLeverage(input.leverage)
   const notional = lots * contractSize(input.symbol) * price
   return notional / lev
+}
+
+/** Units in one full lot (e.g. BTCUSD → 100 BTC). */
+export function unitsPerLot(symbol: string): number {
+  return contractSize(symbol)
+}
+
+/** Volume in base units for the chosen lot size. */
+export function volumeInUnits(symbol: string, lotSize: number): number {
+  return Number(lotSize) * contractSize(symbol)
 }
