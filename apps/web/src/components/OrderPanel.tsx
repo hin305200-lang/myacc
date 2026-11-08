@@ -43,9 +43,11 @@ export default function OrderPanel({
   const [takeProfit, setTakeProfit] = useState('')
   const [tradeSuccess, setTradeSuccess] = useState<'BUY' | 'SELL' | null>(null)
   const submittingRef = useRef(false)
-  const marketClosed = Boolean(symbol && symbol.marketStatus && symbol.marketStatus !== 'open')
+  // Only hard-block when there is no executable bid/ask (allow last-price fills when feed is closed)
+  const noQuote = !symbol || !(Number(symbol.bid) > 0) || !(Number(symbol.ask) > 0)
+  const marketUnavailable = Boolean(symbol?.marketStatus === 'unavailable' && noQuote)
   const buttonsDisabled =
-    tradeLoading || submittingRef.current || tradingLocked || marketClosed || symbol?.tradable === false
+    tradeLoading || submittingRef.current || tradingLocked || marketUnavailable || noQuote
   const lev = effectiveLeverage(leverage)
   const estimatedMarginBuy = useMemo(() => {
     if (!symbol) return 0
@@ -265,9 +267,14 @@ export default function OrderPanel({
               ? ` 1 lot = 100 BTC → @ ask ÷ 1:${lev} ≈ $${estimatedMarginBuy.toLocaleString(undefined, { maximumFractionDigits: 0 })}.`
               : null}
           </p>
-          {symbol.marketStatus && symbol.marketStatus !== 'open' && (
+          {symbol.marketStatus && symbol.marketStatus !== 'open' && !noQuote && (
             <div className="pt-1 text-[11px] text-amber-300">
-              Market {symbol.marketStatus} — last official BID/ASK shown. New orders paused.
+              Market {symbol.marketStatus} — using last BID/ASK for fills.
+            </div>
+          )}
+          {noQuote && (
+            <div className="pt-1 text-[11px] text-amber-300">
+              Waiting for a quote — trading paused until BID/ASK arrive.
             </div>
           )}
         </div>

@@ -6,6 +6,6 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_VERSION": "26",
-    "REDEPLOY_STAMP": "fast-close-balance-20261108b"
+    "REDEPLOY_STAMP": "fast-trade-last-price-20261108c"
   }
 }

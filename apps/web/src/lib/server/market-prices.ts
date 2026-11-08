@@ -349,15 +349,9 @@ export async function resolveExecutableQuote(
     tipAsk >= tipBid &&
     (tip?.quoteTs == null || now - Number(tip.quoteTs) <= CLIENT_QUOTE_MAX_AGE_MS)
 
-  const cached = peekCachedQuote(platform)
-  if (cached && (!cached.tradable || cached.marketStatus !== 'open')) {
-    throw new Error(
-      `Market for ${platform} is ${cached.marketStatus}${cached.stale ? ' (stale quote)' : ''}. Trading is paused until a live quote is available.`
-    )
-  }
-
+  // Client tip wins — open/close must stay sub-second even when the feed is closed/stale
   if (tipOk) {
-    const base = cached || unavailableQuote(platform)
+    const base = peekCachedQuote(platform) || unavailableQuote(platform)
     return {
       ...base,
       symbol: platform,
@@ -373,9 +367,17 @@ export async function resolveExecutableQuote(
     }
   }
 
-  if (cached && cached.tradable && cached.marketStatus === 'open') {
+  const cached = peekCachedQuote(platform)
+  if (cached && cached.bid > 0 && cached.ask > 0) {
     const age = now - (quoteFetchedAt.get(platform) || 0)
-    if (age < EXECUTION_CACHE_MS) return cached
+    // Warm cache with a valid bid/ask is enough to fill (broker last-price style)
+    if (age < EXECUTION_CACHE_MS || cached.tradable) {
+      return {
+        ...cached,
+        tradable: true,
+        marketStatus: cached.marketStatus === 'unavailable' ? 'closed' : cached.marketStatus,
+      }
+    }
   }
 
   return assertExecutableQuote(platform)

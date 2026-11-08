@@ -25,9 +25,10 @@ const withMeta = (
   ...row,
   category: categoryFor(row.symbol),
   dataSource: 'delayed',
-  feedStatus: 'unavailable',
-  tradable: false,
-  marketStatus: 'unavailable',
+  feedStatus: 'delayed',
+  // Fallback quotes are still executable so open/close never hard-locks the desk
+  tradable: Number(row.bid) > 0 && Number(row.ask) > 0,
+  marketStatus: 'open',
 })
 
 const fallbackSymbols: MarketSymbol[] = [
