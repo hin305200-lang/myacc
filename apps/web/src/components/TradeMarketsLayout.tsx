@@ -89,18 +89,18 @@ export default function TradeMarketsLayout({
   return (
     <div className="h-screen flex flex-col bg-[#0a0e27] text-white overflow-hidden">
       {/* ModMount-style top account bar */}
-      <header className="h-12 flex-shrink-0 bg-[#252836] border-b border-[#1e293b] flex items-center justify-between px-3 gap-4">
+      <header className="h-14 lg:h-16 flex-shrink-0 bg-[#252836] border-b border-[#1e293b] flex items-center justify-between px-3 lg:px-4 gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/landing" className="flex items-center gap-2 hover:opacity-90 shrink-0">
-            <div className="h-7 w-7 rounded bg-gradient-to-br from-[#6366f1] to-[#3b82f6] flex items-center justify-center shadow-lg shadow-[#6366f1]/30">
-              <span className="text-[10px] font-black tracking-tight">TM</span>
+            <div className="h-7 w-7 lg:h-8 lg:w-8 rounded bg-gradient-to-br from-[#6366f1] to-[#3b82f6] flex items-center justify-center shadow-lg shadow-[#6366f1]/30">
+              <span className="text-[10px] lg:text-xs font-black tracking-tight">TM</span>
             </div>
-            <span className="text-sm font-semibold tracking-wide hidden xl:inline">TradeMarkets</span>
+            <span className="text-sm lg:text-base font-semibold tracking-wide hidden xl:inline">TradeMarkets</span>
           </Link>
 
           <button
             type="button"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#1e293b] bg-[#111538] text-[11px] text-[#94a3b8] hover:border-[#2d3142] max-w-[220px]"
+            className="flex items-center gap-1.5 px-2.5 py-1 lg:px-3 lg:py-1.5 rounded border border-[#1e293b] bg-[#111538] text-[11px] lg:text-xs text-[#94a3b8] hover:border-[#2d3142] max-w-[220px] lg:max-w-[280px]"
             title={accountLabel}
           >
             <span className="truncate font-medium">{accountLabel}</span>
@@ -108,7 +108,7 @@ export default function TradeMarketsLayout({
           </button>
         </div>
 
-        <div className="flex items-center gap-5 xl:gap-7 text-[11px] overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-5 xl:gap-8 overflow-x-auto scrollbar-none">
           <Metric label="Balance" value={money(account.balance)} sub="USD" />
           <Metric label="Equity" value={money(account.equity)} sub="USD" />
           <Metric label="Free Funds" value={money(account.freeMargin)} sub="USD" />
@@ -124,9 +124,9 @@ export default function TradeMarketsLayout({
             }
           />
           <div className="flex flex-col leading-tight shrink-0">
-            <span className="text-[10px] text-[#64748b] uppercase tracking-wide">Profit</span>
+            <span className="text-[10px] lg:text-xs text-[#64748b] uppercase tracking-wide">Profit</span>
             <span
-              className={`font-semibold font-mono text-[13px] ${
+              className={`font-bold font-mono text-[13px] lg:text-lg ${
                 !userId
                   ? 'text-[#64748b]'
                   : account.profit >= 0
@@ -141,7 +141,7 @@ export default function TradeMarketsLayout({
           </div>
           {account.marginAlert && account.marginAlert.level !== 'ok' && (
             <div
-              className={`text-[10px] font-semibold px-2 py-1 rounded shrink-0 ${
+              className={`text-[10px] lg:text-xs font-semibold px-2 py-1 rounded shrink-0 ${
                 account.marginAlert.level === 'stop_out'
                   ? 'bg-red-500/20 text-red-300'
                   : 'bg-yellow-500/20 text-yellow-200'
@@ -163,9 +163,9 @@ export default function TradeMarketsLayout({
                 onLogin?.()
               }
             }}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#10b981] px-3 py-1.5 text-[11px] font-semibold text-white shadow-[0_0_12px_rgba(16,185,129,0.35)] hover:brightness-110"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#10b981] px-3 py-1.5 lg:px-4 lg:py-2 text-[11px] lg:text-sm font-semibold text-white shadow-[0_0_12px_rgba(16,185,129,0.35)] hover:brightness-110"
           >
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
             Deposit
           </button>
           {isAdmin && (
@@ -257,10 +257,10 @@ export default function TradeMarketsLayout({
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="flex flex-col leading-tight shrink-0">
-      <span className="text-[10px] text-[#64748b] uppercase tracking-wide">{label}</span>
-      <span className="font-semibold font-mono text-[13px] text-white">
+      <span className="text-[10px] lg:text-xs text-[#64748b] uppercase tracking-wide">{label}</span>
+      <span className="font-bold font-mono text-[13px] lg:text-lg text-white">
         {value}
-        {sub ? <span className="ml-1 text-[10px] font-normal text-[#64748b]">{sub}</span> : null}
+        {sub ? <span className="ml-1 text-[10px] lg:text-xs font-normal text-[#64748b]">{sub}</span> : null}
       </span>
     </div>
   )
