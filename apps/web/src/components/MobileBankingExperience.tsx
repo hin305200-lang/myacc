@@ -30,6 +30,7 @@ import { formatMarginLevelIfAuth, formatPlIfAuth } from '@/lib/account-display'
 import { useAuthStore } from '@/stores/auth-store'
 import { apiClient } from '@/lib/api-client'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useClosedPositions, useTransactions } from '@/hooks/useMarketData'
 
 export type MobileBankTab =
   | 'trade'
@@ -714,19 +715,157 @@ function HistorySheet({
   onLogin: () => void
   onWallet: () => void
 }) {
+  const [section, setSection] = useState<'trades' | 'ledger'>('trades')
+  const { trades, isLoading: tradesLoading } = useClosedPositions()
+  const { data: transactions = [], isLoading: txLoading } = useTransactions()
+
+  if (!auth) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <History className="mx-auto h-8 w-8 text-[#64748b]" />
+        <p className="mt-3 text-sm text-[#94a3b8]">Sign in to view trading history.</p>
+        <button
+          type="button"
+          onClick={onLogin}
+          className="mt-4 rounded-lg bg-[#10b981] px-4 py-2 text-sm font-semibold text-white"
+        >
+          Sign in
+        </button>
+      </div>
+    )
+  }
+
+  const formatPrice = (price: number) => {
+    if (price > 100) return price.toFixed(2)
+    if (price > 10) return price.toFixed(3)
+    if (price > 1) return price.toFixed(5)
+    return price.toFixed(5)
+  }
+
   return (
-    <div className="px-4 py-10 text-center">
-      <History className="mx-auto h-8 w-8 text-[#64748b]" />
-      <p className="mt-3 text-sm text-[#94a3b8]">
-        {auth ? 'Closed trades and ledger entries appear in Funds.' : 'Sign in to view trading history.'}
-      </p>
-      <button
-        type="button"
-        onClick={auth ? onWallet : onLogin}
-        className="mt-4 rounded-lg bg-[#10b981] px-4 py-2 text-sm font-semibold text-white"
-      >
-        {auth ? 'Open Funds' : 'Sign in'}
-      </button>
+    <div className="flex h-full flex-col px-3 pb-24 pt-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-white">History</h2>
+          <p className="text-[11px] text-[#64748b]">Closed trades and ledger activity</p>
+        </div>
+        <button
+          type="button"
+          onClick={onWallet}
+          className="rounded-lg border border-[#1e293b] bg-[#111538] px-2.5 py-1.5 text-[11px] font-semibold text-[#94a3b8]"
+        >
+          Wallet
+        </button>
+      </div>
+
+      <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl border border-[#1e293b] bg-[#0a0e27] p-1">
+        <button
+          type="button"
+          onClick={() => setSection('trades')}
+          className={`rounded-lg py-2 text-xs font-semibold ${
+            section === 'trades' ? 'bg-[#161b3d] text-white' : 'text-[#64748b]'
+          }`}
+        >
+          Closed trades ({trades.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setSection('ledger')}
+          className={`rounded-lg py-2 text-xs font-semibold ${
+            section === 'ledger' ? 'bg-[#161b3d] text-white' : 'text-[#64748b]'
+          }`}
+        >
+          Ledger ({transactions.length})
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {section === 'trades' ? (
+          tradesLoading && trades.length === 0 ? (
+            <p className="py-10 text-center text-sm text-[#64748b]">Loading closed trades…</p>
+          ) : trades.length === 0 ? (
+            <div className="rounded-xl border border-[#1e293b] bg-[#111538] px-4 py-10 text-center">
+              <History className="mx-auto h-7 w-7 text-[#64748b]" />
+              <p className="mt-3 text-sm text-[#94a3b8]">No closed trades yet</p>
+              <p className="mt-1 text-[11px] text-[#64748b]">Closed positions will show up here.</p>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {trades.map((t) => (
+                <li
+                  key={t.id}
+                  className="rounded-xl border border-[#1e293b] bg-[#111538] px-3 py-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white">{t.symbol}</span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                            t.side === 'BUY'
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : 'bg-rose-500/15 text-rose-300'
+                          }`}
+                        >
+                          {t.side}
+                        </span>
+                        <span className="text-[11px] text-[#64748b]">{Number(t.lotSize).toFixed(2)} lot</span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-[#94a3b8]">
+                        {formatPrice(Number(t.openPrice))} → {formatPrice(Number(t.closePrice))}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-[#64748b]">
+                        Closed {new Date(t.closedAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div
+                      className={`font-mono text-sm font-semibold ${
+                        Number(t.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {Number(t.profit) >= 0 ? '+' : ''}
+                      ${Number(t.profit).toFixed(2)}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : txLoading && transactions.length === 0 ? (
+          <p className="py-10 text-center text-sm text-[#64748b]">Loading ledger…</p>
+        ) : transactions.length === 0 ? (
+          <div className="rounded-xl border border-[#1e293b] bg-[#111538] px-4 py-10 text-center">
+            <p className="text-sm text-[#94a3b8]">No ledger entries yet</p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {transactions.map((tx) => (
+              <li
+                key={tx.id}
+                className="flex items-center justify-between gap-2 rounded-xl border border-[#1e293b] bg-[#111538] px-3 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-white">{tx.type}</div>
+                  <div className="text-[10px] text-[#64748b]">
+                    {new Date(tx.createdAt).toLocaleString()}
+                  </div>
+                  {tx.note ? (
+                    <div className="mt-0.5 truncate text-[11px] text-[#94a3b8]">{tx.note}</div>
+                  ) : null}
+                </div>
+                <div
+                  className={`shrink-0 font-mono text-sm font-semibold ${
+                    Number(tx.amount) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {Number(tx.amount) >= 0 ? '+' : ''}
+                  ${Number(tx.amount).toFixed(2)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }

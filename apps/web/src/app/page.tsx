@@ -486,7 +486,9 @@ export default function TradingPlatform() {
       applyAccountFromResponse((result as any).account)
       setToast({ message: 'Position closed', type: 'success' })
       void refetchPositions()
+      void queryClient.invalidateQueries({ queryKey: ['positions-closed'] })
       void queryClient.invalidateQueries({ queryKey: ['account-summary'] })
+      void queryClient.invalidateQueries({ queryKey: ['account-transactions'] })
     } catch (error: any) {
       console.error('Close position failed', error)
       void refetchPositions()

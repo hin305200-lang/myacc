@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
+import { useClosedPositions } from '@/hooks/useMarketData'
 
 interface Position {
   id: string
@@ -30,6 +31,7 @@ export default function BottomPanel({ positions, onClosePosition, onCloseAll }: 
   const [activeTab, setActiveTab] = useState<Tab>('open')
   const [closingId, setClosingId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const { trades: closedTrades } = useClosedPositions()
 
   const formatDate = (date: string) => {
     const d = new Date(date)
@@ -252,7 +254,51 @@ export default function BottomPanel({ positions, onClosePosition, onCloseAll }: 
           <EmptyState label="No finance records" />
         )}
         {activeTab === 'closed' && (
-          <EmptyState label="No closed positions" />
+          closedTrades.length === 0 ? (
+            <EmptyState label="No closed positions" />
+          ) : (
+            <table className="w-full text-left text-[11px]">
+              <thead className="sticky top-0 bg-[#151824] text-[#64748b]">
+                <tr>
+                  <th className="px-2 py-1.5 font-medium">Closed</th>
+                  <th className="px-2 py-1.5 font-medium">Symbol</th>
+                  <th className="px-2 py-1.5 font-medium">Side</th>
+                  <th className="px-2 py-1.5 font-medium">Volume</th>
+                  <th className="px-2 py-1.5 font-medium">Open</th>
+                  <th className="px-2 py-1.5 font-medium">Close</th>
+                  <th className="px-2 py-1.5 font-medium text-right">Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {closedTrades.map((t) => (
+                  <tr key={t.id} className="border-t border-[#2d3142]/40 text-white">
+                    <td className="px-2 py-1.5 text-[#94a3b8] whitespace-nowrap">
+                      {formatDate(t.closedAt)}
+                    </td>
+                    <td className="px-2 py-1.5 font-semibold">{t.symbol}</td>
+                    <td
+                      className={`px-2 py-1.5 font-semibold ${
+                        t.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {t.side}
+                    </td>
+                    <td className="px-2 py-1.5 font-mono">{Number(t.lotSize).toFixed(2)}</td>
+                    <td className="px-2 py-1.5 font-mono">{formatPrice(Number(t.openPrice))}</td>
+                    <td className="px-2 py-1.5 font-mono">{formatPrice(Number(t.closePrice))}</td>
+                    <td
+                      className={`px-2 py-1.5 font-mono text-right font-semibold ${
+                        Number(t.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {Number(t.profit) >= 0 ? '+' : ''}
+                      {Number(t.profit).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
         )}
       </div>
     </div>

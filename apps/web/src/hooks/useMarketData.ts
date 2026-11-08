@@ -358,6 +358,39 @@ export const useOpenPositions = () => {
   return { positions: data ?? [], refetch }
 }
 
+export type ClosedTrade = {
+  id: string
+  symbol: string
+  side: 'BUY' | 'SELL'
+  lotSize: number
+  openPrice: number
+  closePrice: number
+  profit: number
+  swap?: number
+  commission?: number
+  openedAt: string
+  closedAt: string
+}
+
+export const useClosedPositions = () => {
+  const token = useAuthStore((state) => state.accessToken)
+  const { data, refetch, isLoading, isFetching } = useQuery({
+    queryKey: ['positions-closed'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: ClosedTrade[] }>(
+        '/account/positions/closed',
+        token ?? undefined
+      )
+      return response.data ?? []
+    },
+    enabled: !!token,
+    staleTime: 5_000,
+    refetchOnMount: 'always',
+  })
+
+  return { trades: data ?? [], refetch, isLoading, isFetching }
+}
+
 let sharedSocket: Socket | null = null
 
 export const useSharedSocket = () => {
