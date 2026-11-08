@@ -579,7 +579,11 @@ export default function TradingPlatform() {
                       tradeLoading={tradeLoading}
                       tradingLocked={!!accessToken && !canTrade}
                       tradingLockedReason="Pending admin approval — use Chat to contact support"
-                      leverage={Number(accountSummary?.leverage ?? 10)}
+                      leverage={
+                        Number(accountSummary?.leverage) >= 1
+                          ? Number(accountSummary?.leverage)
+                          : 10
+                      }
                     />
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import { contractSize } from '@/lib/contract-sizes'
+import { effectiveLeverage } from '@/lib/estimate-margin'
 
 export type OpenPositionLike = {
   id: string
@@ -22,7 +23,7 @@ export function calcPositionMargin(order: OpenPositionLike, leverage = 10): numb
   if (Number.isFinite(stored) && stored > 0) return stored
   const lots = Number(order.lotSize)
   const price = Number(order.openPrice)
-  const lev = Math.max(1, leverage || 10)
+  const lev = effectiveLeverage(leverage)
   if (!(lots > 0) || !(price > 0)) return 0
   return (lots * contractSize(String(order.symbol || '')) * price) / lev
 }

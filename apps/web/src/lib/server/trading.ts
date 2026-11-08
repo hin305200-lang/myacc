@@ -33,9 +33,14 @@ export function calculateMargin({
   leverage: number
   symbol: string
 }) {
-  // Margin = Trade Value / Leverage ; Trade Value = lots × contract × price
-  const lev = Math.max(1, leverage || DEFAULT_LEVERAGE)
-  const tradeValue = lotSize * contractSizeFor(symbol) * price
+  // Margin = (lots × contract × price) / leverage
+  // e.g. 1 BTCUSD @ $68,000 with 1:10 → $6,800
+  const raw = Number(leverage)
+  const lev = Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_LEVERAGE
+  const lots = Number(lotSize)
+  const px = Number(price)
+  if (!(lots > 0) || !(px > 0)) return 0
+  const tradeValue = lots * contractSizeFor(symbol) * px
   return tradeValue / lev
 }
 

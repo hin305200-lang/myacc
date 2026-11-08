@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TrendingUp, TrendingDown, Shield } from 'lucide-react'
-import { contractSize } from '@/lib/contract-sizes'
+import { effectiveLeverage, estimateMargin } from '@/lib/estimate-margin'
 
 interface MarketSymbol {
   symbol: string
@@ -44,11 +44,25 @@ export default function OrderPanel({
   const marketClosed = Boolean(symbol && symbol.marketStatus && symbol.marketStatus !== 'open')
   const buttonsDisabled =
     tradeLoading || submittingRef.current || tradingLocked || marketClosed || symbol?.tradable === false
-  const estimatedMargin = useMemo(() => {
+  const lev = effectiveLeverage(leverage)
+  const estimatedMarginBuy = useMemo(() => {
     if (!symbol) return 0
-    const lev = Math.max(1, leverage)
-    return (lotSize * contractSize(symbol.symbol) * symbol.ask) / lev
-  }, [symbol, lotSize, leverage])
+    return estimateMargin({
+      symbol: symbol.symbol,
+      lotSize,
+      price: symbol.ask,
+      leverage: lev,
+    })
+  }, [symbol, lotSize, lev])
+  const estimatedMarginSell = useMemo(() => {
+    if (!symbol) return 0
+    return estimateMargin({
+      symbol: symbol.symbol,
+      lotSize,
+      price: symbol.bid,
+      leverage: lev,
+    })
+  }, [symbol, lotSize, lev])
 
   useEffect(() => {
     if (!tradeLoading) submittingRef.current = false
@@ -201,12 +215,19 @@ export default function OrderPanel({
           </div>
           <div className="flex justify-between items-center gap-1 py-0.5">
             <span className="shrink-0">Leverage</span>
-            <span className="text-white font-semibold">1:{Math.max(1, leverage)}</span>
+            <span className="text-white font-semibold">1:{lev}</span>
           </div>
           <div className="flex justify-between items-center gap-1 py-0.5">
-            <span className="shrink-0">Est. margin</span>
-            <span className="text-white font-mono truncate">${estimatedMargin.toFixed(2)}</span>
+            <span className="shrink-0">Est. margin BUY</span>
+            <span className="text-[#10b981] font-mono truncate">${estimatedMarginBuy.toFixed(2)}</span>
           </div>
+          <div className="flex justify-between items-center gap-1 py-0.5">
+            <span className="shrink-0">Est. margin SELL</span>
+            <span className="text-[#ef4444] font-mono truncate">${estimatedMarginSell.toFixed(2)}</span>
+          </div>
+          <p className="pt-1 text-[9px] leading-relaxed text-[#64748b]">
+            Margin = (lots × contract × price) ÷ leverage. Example: 1 BTCUSD ÷ 1:{lev} = price/{lev}.
+          </p>
           {symbol.marketStatus && symbol.marketStatus !== 'open' && (
             <div className="pt-1 text-[11px] text-amber-300">
               Market {symbol.marketStatus} — last official BID/ASK shown. New orders paused.
